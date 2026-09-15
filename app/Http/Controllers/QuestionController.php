@@ -1311,7 +1311,7 @@ class QuestionController extends Controller
         } catch (\Throwable $th) {
             Log::info('Error el history de un usuario: '.$th->getMessage());
 
-            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
+            return $th->getMessage();//CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
     }
 
