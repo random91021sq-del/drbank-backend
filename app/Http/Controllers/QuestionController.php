@@ -1226,10 +1226,10 @@ class QuestionController extends Controller
                         ->select(
                             'specialties.id_specialty as id',
                             'specialties.specialty as name',
-                            DB::raw('SUM(history.ok) as ok'),
-                            DB::raw('SUM(history.error) as error'),
-                            DB::raw('SUM(history.empty) as empty'),
-                            DB::raw('SUM(history.count) as count')
+                           DB::raw('SUM(history.ok) as `ok`'),
+                           DB::raw('SUM(history.error) as `error`'),
+                           DB::raw('SUM(history.empty) as `empty`'),
+                           DB::raw('SUM(history.count) as `count`')
                         )
                         ->groupBy(
                             'specialties.id_specialty',
@@ -1246,10 +1246,10 @@ class QuestionController extends Controller
                         ->select(
                             'areas.id_area as id',
                             'areas.area as name',
-                            DB::raw('SUM(history.ok) as ok'),
-                            DB::raw('SUM(history.error) as error'),
-                            DB::raw('SUM(history.empty) as empty'),
-                            DB::raw('SUM(history.count) as count')
+                           DB::raw('SUM(history.ok) as `ok`'),
+                           DB::raw('SUM(history.error) as `error`'),
+                           DB::raw('SUM(history.empty) as `empty`'),
+                           DB::raw('SUM(history.count) as `count`')
                         )
                         ->groupBy(
                             'areas.id_area',
@@ -1265,10 +1265,10 @@ class QuestionController extends Controller
                         ->select(
                             'themes.id_theme as id',
                             'themes.theme as name',
-                            DB::raw('SUM(history.ok) as ok'),
-                            DB::raw('SUM(history.error) as error'),
-                            DB::raw('SUM(history.empty) as empty'),
-                            DB::raw('SUM(history.count) as count')
+                            DB::raw('SUM(history.ok) as `ok`'),
+                            DB::raw('SUM(history.error) as `error`'),
+                            DB::raw('SUM(history.empty) as `empty`'),
+                            DB::raw('SUM(history.count) as `count`')
                         )
                         ->groupBy(
                             'themes.id_theme',
@@ -1311,7 +1311,7 @@ class QuestionController extends Controller
         } catch (\Throwable $th) {
             Log::info('Error el history de un usuario: '.$th->getMessage());
 
-            return $th->getMessage();//CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
+            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
     }
 
