@@ -26,3 +26,13 @@ Route::prefix(env('APP_VERSION_ONE'))->group(function () {
 });
 
 Route::post('pubsub-endpoint', [PubSubController::class, 'pubSubEndpoint']);
+Route::post('/process-queue', function () {
+    Artisan::call('queue:work', [
+        '--once' => true,
+        '--stop-when-empty' => true,
+    ]);
+
+    return response()->json([
+        'status' => 'queue processed'
+    ]);
+});
