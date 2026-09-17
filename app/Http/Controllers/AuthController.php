@@ -116,7 +116,7 @@ class AuthController extends Controller
      *     )
      * )
      */
-    public function register(RegisterRequest $request): JsonResponse
+    public function register(RegisterRequest $request)
     {
         $language = $request->query('lang');
         try {
