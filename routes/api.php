@@ -5,6 +5,7 @@ use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\PubSubController;
 use App\Http\Controllers\StudentProgressController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Artisan;
 
 Route::prefix(env('APP_VERSION_ONE'))->group(function () {
     Route::prefix('auth')->group(base_path('routes/auth/auth.php'));
