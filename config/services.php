@@ -25,7 +25,9 @@ return [
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],
-
+    'brevo' => [
+        'key' => env('BREVO_API_KEY'),
+    ],
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
@@ -59,8 +61,5 @@ return [
         'key_id' => env('APPLE_KEY_ID'),
         'private_key' => env('APPLE_PRIVATE_KEY'),
         'redirect' => env('APPLE_REDIRECT_URI'),
-    ],
-    'brevo' => [
-        'key' => env('BREVO_API_KEY'),
-    ],
+    ]
 ];

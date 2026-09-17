@@ -20,7 +20,8 @@
         "laravel/tinker": "^2.10.1",
         "lcobucci/jwt": "5.5",
         "socialiteproviders/apple": "^5.10",
-        "symfony/brevo-mailer": "^7.4"
+        "symfony/brevo-mailer": "*",
+        "symfony/http-client": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
