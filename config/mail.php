@@ -36,23 +36,18 @@ return [
     */
 
     'mailers' => [
-
+        'brevo' => [
+            'transport' => 'brevo',
+        ],
         'smtp' => [
             'transport' => 'smtp',
-            'host' => env('MAIL_HOST', 'smtp-relay.brevo.com'),
-            'port' => env('MAIL_PORT', 587),
+            'host' => env('MAIL_HOST', '127.0.0.1'),
+            'port' => env('MAIL_PORT', 2525),
             'encryption' => env('MAIL_ENCRYPTION', 'tls'),
-            'username' => env('MAIL_USERNAME', env('MAIL_FROM_ADDRESS', 'apikey')),
-            'password' => env('MAIL_PASSWORD', env('BREVO_SMTP_PASSWORD', env('API_KEY_BREVO'))),
+            'username' => env('MAIL_USERNAME'),
+            'password' => env('MAIL_PASSWORD'),
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url(env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
-            'stream' => [
-                'ssl' => [
-                    'verify_peer' => filter_var(env('MAIL_VERIFY_PEER', false), FILTER_VALIDATE_BOOLEAN),
-                    'verify_peer_name' => filter_var(env('MAIL_VERIFY_PEER_NAME', false), FILTER_VALIDATE_BOOLEAN),
-                    'allow_self_signed' => filter_var(env('MAIL_ALLOW_SELF_SIGNED', true), FILTER_VALIDATE_BOOLEAN),
-                ],
-            ],
         ],
 
         'ses' => [

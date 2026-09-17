@@ -60,4 +60,7 @@ return [
         'private_key' => env('APPLE_PRIVATE_KEY'),
         'redirect' => env('APPLE_REDIRECT_URI'),
     ],
+    'brevo' => [
+    'key' => env('BREVO_API_KEY'),
+],
 ];
