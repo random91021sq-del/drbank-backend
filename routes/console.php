@@ -28,6 +28,6 @@ Schedule::command('student:plan')
     ->withoutOverlapping();
 
 Schedule::command('student:recommendation')
-    ->everyThreeHours()
+    ->everyThirtyMinutes()
     ->timezone('America/Lima')
     ->withoutOverlapping();
