@@ -152,7 +152,7 @@ class AuthController extends Controller
         } catch (\Throwable $e) {
             Log::info('Error en register: '.$e->getMessage());
 
-            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
+            return $e->getMessage();//CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
     }
 
