@@ -37,7 +37,8 @@ return [
 
     'mailers' => [
         'brevo' => [
-            'transport' => 'brevo',
+            'transport' => 'brevo+api',
+            'key' => env('BREVO_API_KEY'),
         ],
         'smtp' => [
             'transport' => 'smtp',

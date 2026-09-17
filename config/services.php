@@ -61,6 +61,6 @@ return [
         'redirect' => env('APPLE_REDIRECT_URI'),
     ],
     'brevo' => [
-    'key' => env('BREVO_API_KEY'),
-],
+        'key' => env('BREVO_API_KEY'),
+    ],
 ];
