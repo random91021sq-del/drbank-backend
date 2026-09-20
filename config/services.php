@@ -28,6 +28,10 @@ return [
     'brevo' => [
         'key' => env('BREVO_API_KEY'),
     ],
+    'groq' => [
+        'key' => env('GROQ_API_KEY'),
+        'model' => env('MODEL_GROQ', 'openai/gpt-oss-120b'),
+    ],
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

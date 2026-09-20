@@ -17,8 +17,8 @@ class NeuronAIServices extends Agent
     protected function provider(): AIProviderInterface
     {
         return new class(
-            key  : env('GROQ_API_KEY'),
-            model: env('MODEL_GROQ', 'llama-3.3-70b-versatile'),
+            key  : config('services.groq.key'),
+            model: config('services.groq.model'),
         ) extends OpenAI {
             protected string $baseUri = 'https://api.groq.com/openai/v1';
         };
