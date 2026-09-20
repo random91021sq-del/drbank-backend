@@ -26,10 +26,10 @@ class FeedbackRequest extends FormRequest
         return [
             'lang' => ['alpha', 'size:' . env('DIGITS_LANGUAGE')],
             'reason' => ['required'],
-            'description' => ['required', 'string', 'min:' . env('MIN_DESCRIPTION'), 'max:' . env('MAX_DESCRIPTION'), 'regex:/^[\pL\s,.]+$/u'],
-            'full_name' => ['required', 'string', 'min:' . env('MIN_FULL_NAME'), 'max:' . env('MAX_FULL_NAME'), 'regex:/^[\pL\s]+$/u'],
-            'email' => ['required', 'string', 'email', 'max:' . env('MAX_EMAIL'), 'regex:/^[a-zA-Z0-9@._-]+$/u'],
-            'response' => ['required', 'string', 'min:' . env('MIN_RESPONSE'), 'max:' . env('MAX_RESPONSE'), 'regex:/^[a-zA-Z0-9@._-]+$/u'],
+            'description' => ['required', 'string', 'min:' . env('MIN_DESCRIPTION')],
+            'full_name' => ['required', 'string', 'min:' . env('MIN_FULL_NAME')],
+            'email' => ['required', 'string', 'email'],
+            'response' => ['required', 'string', 'min:' . env('MIN_RESPONSE')],
         ];
     }
     public function messages()
@@ -39,10 +39,8 @@ class FeedbackRequest extends FormRequest
             'required' => CustomResponse::responseValidation('required', $language),
             'alpha' => CustomResponse::responseValidation('alpha', $language),
             'size' => CustomResponse::responseValidation('size', $language),
-            'max' => CustomResponse::responseValidation('max', $language),
             'min' => CustomResponse::responseValidation('min', $language),
             'string' => CustomResponse::responseValidation('string', $language),
-            'regex' => CustomResponse::responseValidation('regex', $language),
             'email' => CustomResponse::responseValidation('email', $language),
         ];
     }

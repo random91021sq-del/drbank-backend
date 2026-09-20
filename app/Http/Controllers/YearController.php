@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Custom\CustomResponse;
 use App\Http\Requests\LanguageRequest;
-use App\Models\Year;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -97,24 +97,9 @@ class YearController extends Controller
     {
         $language = $request->query('lang');
         try {
-
-            $year = Year::select('year')
-                ->orderByRaw("
-                    CAST(SUBSTRING(year,1,4) AS UNSIGNED),
-                    CASE
-                        WHEN LOWER(year) LIKE '%extraordinario%' THEN 1
-                        WHEN LOWER(year) LIKE '%ordinario%' THEN 2
-                        ELSE 3
-                    END,
-                    CAST(
-                        CASE
-                            WHEN LOWER(year) REGEXP 'extraordinario [0-9]+'
-                            THEN SUBSTRING_INDEX(year, ' ', -1)
-                            ELSE 0
-                        END
-                    AS UNSIGNED)
-                ")
-                ->get();
+            $year = DB::table('year_by_exam')
+                ->where(['id_exam_type' => $request->exam])
+                ->get(['year']);
             if ($year->isEmpty()) {
                 return CustomResponse::responseMessage('notFoundRegister', Response::HTTP_BAD_REQUEST, $language);
             }
