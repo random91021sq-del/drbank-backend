@@ -42,8 +42,8 @@ class StudentRecommendationCommand extends Command
             ->count();
 
         if ($total === 0) {
-            $this->warn('No se encontraron exámenes pendientes de recomendación.');
-            return self::FAILURE;
+            $this->info('No se encontraron exámenes pendientes de recomendación.');
+            return self::SUCCESS;
         }
 
         $this->info("Total de exámenes a procesar: {$total}");

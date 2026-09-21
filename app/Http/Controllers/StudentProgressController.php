@@ -146,6 +146,8 @@ class StudentProgressController extends Controller
          * 1. Obtener el plan de estudio actual
          */
         $studyPlan = StudentStudyPlan::where('id_client', $studentId)
+            ->orderByDesc('generated_at')
+            ->orderByDesc('id')
             ->first();
 
         $planData = json_decode($studyPlan->plan_data, true);
@@ -479,7 +481,10 @@ class StudentProgressController extends Controller
         $nowPeru = Carbon::now('America/Lima');
 
         // 1. Obtener el plan activo
-        $studyPlan = StudentStudyPlan::where('id_client', '=', $studentId, 'and')->first();
+        $studyPlan = StudentStudyPlan::where('id_client', '=', $studentId, 'and')
+            ->orderByDesc('generated_at')
+            ->orderByDesc('id')
+            ->first();
 
         if (! $studyPlan) {
             return response()->json(['error' => 'No tienes un plan de estudio activo'], 404);
@@ -496,15 +501,29 @@ class StudentProgressController extends Controller
 
         // 2. Obtener todos los UUIDs de la semana ACTIVA
         $weekUuids = [];
+        $assignedDates = [];
         foreach ($planData['weekly_schedule'] as $day => $topics) {
             foreach ($topics as $topic) {
                 $weekUuids[] = $topic['theme_uuid'];
+
+                if (! empty($topic['assigned_date'])) {
+                    $assignedDates[] = $topic['assigned_date'];
+                }
             }
         }
+
+        $weekUuids = array_values(array_unique($weekUuids));
+        $planStartDate = empty($assignedDates) ? null : min($assignedDates);
+        $planEndDate = empty($assignedDates) ? null : max($assignedDates);
 
         // 3. Consultar la tabla de progreso de la semana activa
         $completedUuids = StudentDailyProgress::where('id_client', '=', $studentId, 'and')
             ->whereIn('theme_uuid', $weekUuids)
+            ->when($planStartDate && $planEndDate, function ($query) use ($planStartDate, $planEndDate) {
+                $query->whereBetween('due_date', [$planStartDate, $planEndDate]);
+            })
+            ->where('status', 'completed')
+            ->distinct()
             ->pluck('theme_uuid')
             ->toArray();
 
