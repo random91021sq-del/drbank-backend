@@ -174,6 +174,9 @@ class QuestionController extends Controller
             $questions = Question::query()->where('questions.status', '1')
                 ->join('themes', 'questions.id_theme', '=', 'themes.id_theme')
                 ->join('specialties', 'themes.id_specialty', '=', 'specialties.id_specialty')
+                ->when(! empty($request->area), function ($query) use ($request) {
+                    $query->where('specialties.id_area', $request->area);
+                })
                 ->when(! empty($request->specialty), function ($query) use ($request) {
                     $query->where('specialties.id_specialty', $request->specialty);
                 })

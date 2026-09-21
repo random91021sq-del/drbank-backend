@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Custom\CustomResponse;
 use App\Http\Requests\SpecialtyRequest;
-use App\Models\Theme;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
@@ -96,9 +95,22 @@ class ThemeController extends Controller
     {
         $language = $request->query('lang');
         try {
-            $themes = DB::table('themes_by_exam')
-                     ->where(['id_specialty'=>$request->specialty,'id_exam_type'=>$request->exam])
-                     ->get(['theme', 'uuid AS id']);
+            $themes = DB::table('questions')
+                ->join('themes', 'questions.id_theme', '=', 'themes.id_theme')
+                ->join('specialties', 'themes.id_specialty', '=', 'specialties.id_specialty')
+                ->where('questions.id_exam_type', $request->exam)
+                ->where('questions.status', 1)
+                ->where('themes.id_specialty', $request->specialty)
+                ->when($request->filled('area'), function ($query) use ($request) {
+                    $query->where('specialties.id_area', $request->area);
+                })
+                ->when($request->filled('year'), function ($query) use ($request) {
+                    $query->whereIn('questions.year', (array) $request->year);
+                })
+                ->select('themes.theme', 'themes.uuid AS id')
+                ->distinct()
+                ->orderBy('themes.theme')
+                ->get();
             if ($themes->isEmpty()) {
                 return CustomResponse::responseMessage('notFoundRegister', Response::HTTP_BAD_REQUEST, $language);
             }

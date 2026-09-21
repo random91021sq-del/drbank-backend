@@ -25,7 +25,9 @@ class AreaRequest extends FormRequest
     {
         return [
             'lang' => ['alpha', 'size:' . env('DIGITS_LANGUAGE')],
-             'exam' => 'required|string',
+            'exam' => ['required', 'string'],
+            'year' => ['nullable', 'array'],
+            'year.*' => ['string'],
         ];
     }
     

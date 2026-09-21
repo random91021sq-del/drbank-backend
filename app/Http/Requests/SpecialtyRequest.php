@@ -26,6 +26,10 @@ class SpecialtyRequest extends FormRequest
         return [
             'lang' => ['alpha', 'size:' . env('DIGITS_LANGUAGE')],
             'specialty' => 'required|integer|digits_between:' . env('DIGITS_SPECIALTY'),
+            'exam' => ['required', 'string'],
+            'area' => ['nullable', 'integer'],
+            'year' => ['nullable', 'array'],
+            'year.*' => ['string'],
         ];
     }
     protected function prepareForValidation()

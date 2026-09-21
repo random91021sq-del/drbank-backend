@@ -97,9 +97,25 @@ class YearController extends Controller
     {
         $language = $request->query('lang');
         try {
-            $year = DB::table('year_by_exam')
-                ->where(['id_exam_type' => $request->exam])
-                ->get(['year']);
+            $year = DB::table('questions')
+                ->join('themes', 'questions.id_theme', '=', 'themes.id_theme')
+                ->join('specialties', 'themes.id_specialty', '=', 'specialties.id_specialty')
+                ->where('questions.id_exam_type', $request->exam)
+                ->where('questions.status', 1)
+                ->when($request->filled('area'), function ($query) use ($request) {
+                    $query->where('specialties.id_area', $request->area);
+                })
+                ->when($request->filled('specialty'), function ($query) use ($request) {
+                    $query->where('themes.id_specialty', $request->specialty);
+                })
+                ->when($request->filled('theme'), function ($query) use ($request) {
+                    $query->where('themes.uuid', $request->theme);
+                })
+                ->select('questions.year')
+                ->whereNotNull('questions.year')
+                ->distinct()
+                ->orderByDesc('questions.year')
+                ->get();
             if ($year->isEmpty()) {
                 return CustomResponse::responseMessage('notFoundRegister', Response::HTTP_BAD_REQUEST, $language);
             }

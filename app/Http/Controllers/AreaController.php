@@ -80,9 +80,19 @@ class AreaController extends Controller
     {
         try {
             Log::info('request enviado: ' . json_encode($request->all()));
-            $areas = DB::table('areas_by_exam')
-                    ->where('id_exam_type', $request->exam)
-                     ->get(['id_area as id','area as name']);
+            $areas = DB::table('questions')
+                ->join('themes', 'questions.id_theme', '=', 'themes.id_theme')
+                ->join('specialties', 'themes.id_specialty', '=', 'specialties.id_specialty')
+                ->join('areas', 'specialties.id_area', '=', 'areas.id_area')
+                ->where('questions.id_exam_type', $request->exam)
+                ->where('questions.status', 1)
+                ->when($request->filled('year'), function ($query) use ($request) {
+                    $query->whereIn('questions.year', (array) $request->year);
+                })
+                ->select('areas.id_area as id', 'areas.area as name')
+                ->distinct()
+                ->orderBy('areas.area')
+                ->get();
             return CustomResponse::responseBody($areas, Response::HTTP_OK);
         } catch (\Throwable $th) {
             Log::info('Error en areas: ' . $th->getMessage());

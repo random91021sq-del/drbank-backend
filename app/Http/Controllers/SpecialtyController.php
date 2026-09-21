@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Custom\CustomResponse;
 use App\Http\Requests\LanguageRequest;
-use App\Models\Specialty;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -107,9 +106,19 @@ class SpecialtyController extends Controller
     {
         $language = $request->query('lang');
         try {
-            $specialtiesTable = DB::table('specialties_by_exam')
-                ->where(['id_area' => $request->area, 'id_exam_type' => $request->exam])
-                ->select('id_specialty AS id', 'specialty AS name')->cursor()
+            $specialtiesTable = DB::table('questions')
+                ->join('themes', 'questions.id_theme', '=', 'themes.id_theme')
+                ->join('specialties', 'themes.id_specialty', '=', 'specialties.id_specialty')
+                ->where('questions.id_exam_type', $request->exam)
+                ->where('questions.status', 1)
+                ->where('specialties.id_area', $request->area)
+                ->when($request->filled('year'), function ($query) use ($request) {
+                    $query->whereIn('questions.year', (array) $request->year);
+                })
+                ->select('specialties.id_specialty AS id', 'specialties.specialty AS name')
+                ->distinct()
+                ->orderBy('specialties.specialty')
+                ->get()
                 ->map(function ($item) {
                     return [
                         'id' => (int) $item->id,
