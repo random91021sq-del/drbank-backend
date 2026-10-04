@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Custom\CustomResponse;
-use App\Http\Requests\LanguageRequest;
+use App\Http\Requests\SpecialtyListRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -34,6 +34,15 @@ class SpecialtyController extends Controller
      *         required=true,
      *
      *         @OA\Schema(type="integer",example=1)
+     *     ),
+     *
+     *     @OA\Parameter(
+     *         name="exam",
+     *         in="query",
+     *         description="Tipo de examen que debe tener preguntas activas",
+     *         required=true,
+     *
+     *         @OA\Schema(type="string", example="Residentado Médico")
      *     ),
      *
      * @OA\Response(
@@ -102,22 +111,26 @@ class SpecialtyController extends Controller
      *     )
      * )
      */
-    public function specialty(LanguageRequest $request): JsonResponse
+    public function specialty(SpecialtyListRequest $request): JsonResponse
     {
         $language = $request->query('lang');
         try {
             $specialtiesTable = DB::table('questions')
                 ->join('themes', 'questions.id_theme', '=', 'themes.id_theme')
                 ->join('specialties', 'themes.id_specialty', '=', 'specialties.id_specialty')
+                ->join('areas', 'specialties.id_area', '=', 'areas.id_area')
                 ->where('questions.id_exam_type', $request->exam)
                 ->where('questions.status', 1)
+                ->where('themes.status', 1)
+                ->where('specialties.status', 1)
+                ->where('areas.status', 1)
                 ->where('specialties.id_area', $request->area)
                 ->when($request->filled('year'), function ($query) use ($request) {
                     $query->whereIn('questions.year', (array) $request->year);
                 })
                 ->select('specialties.id_specialty AS id', 'specialties.specialty AS name')
                 ->distinct()
-                ->orderBy('specialties.specialty')
+                ->orderBy('specialties.specialty', 'asc')
                 ->get()
                 ->map(function ($item) {
                     return [

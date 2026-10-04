@@ -313,6 +313,20 @@ class StudentRecommendationCommand extends Command
         === PREGUNTAS INCORRECTAS O EN BLANCO ===
         {$failedBlock}
         Redacta una recomendación motivadora, clara y accionable basada exclusivamente en los datos anteriores.
+
+        La recomendación NO debe limitarse a indicar que el estudiante debe mejorar un área,
+        especialidad. Debe priorizar los temas concretos asociados a las respuestas incorrectas
+        o en blanco y explicar qué conocimiento o capacidad específica debe reforzar.
+
+        Para cada tema prioritario:
+        - menciona el tema por su nombre;
+        - relaciona la recomendación con la evidencia observada en las preguntas;
+        - propone una acción de estudio concreta (qué repasar o practicar y cómo hacerlo);
+        - incluye un criterio breve y verificable para comprobar la mejora.
+
+        Agrupa preguntas del mismo tema para evitar recomendaciones repetidas y ordena los temas
+        por prioridad según la cantidad y relevancia de los errores. No inventes categorías,
+        contenidos, resultados ni debilidades que no se desprendan de la información.
         PROMPT;
     }
 }

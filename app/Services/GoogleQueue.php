@@ -3,40 +3,41 @@
 namespace App\Services;
 
 use Google\Cloud\PubSub\PubSubClient;
-use Illuminate\Http\Response;
 
 class GoogleQueue
 {
-    public static function getCredentials()
+    public static function getCredentials(): array
     {
-        try {
-            $credentials = json_decode(
-                file_get_contents(storage_path('app/google/avance-4-ec9701af2633.json')),
-                true
+        $credentialsPath = config('services.pubsub.credentials');
+
+        if (! is_string($credentialsPath) || ! is_file($credentialsPath)) {
+            throw new \RuntimeException(
+                'No se encontró la credencial de Google Pub/Sub. Revisa PUBSUB_CREDENTIALS.'
             );
-            return $credentials;
-        } catch (\Throwable $th) {
-            return response()->json([
-                'error' => $th->getMessage(),
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+
+        $credentials = json_decode(
+            file_get_contents($credentialsPath),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+
+        return $credentials;
     }
-    
-    public static function sendQueue(mixed $data)
+
+    public static function sendQueue(mixed $data): void
     {
         $credentials = self::getCredentials();
 
         $pubSub = new PubSubClient([
-            'projectId' => 'avance-4',
+            'projectId' => config('services.pubsub.project_id'),
             'credentials' => $credentials,
         ]);
-        $topic = $pubSub->topic('drbank_topic');
-        
-        //Convertimos el array/objeto a una cadena JSON
-        $jsonData = json_encode($data);
+        $topic = $pubSub->topic(config('services.pubsub.topic'));
 
         $topic->publish([
-                'data' => $jsonData
+            'data' => json_encode($data, JSON_THROW_ON_ERROR),
         ]);
     }
 }

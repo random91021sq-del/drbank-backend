@@ -58,6 +58,14 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT'),
     ],
+    'pubsub' => [
+        'project_id' => env('PUBSUB_PROJECT_ID', 'avance-4'),
+        'topic' => env('PUBSUB_TOPIC', 'drbank_topic'),
+        'credentials' => env(
+            'PUBSUB_CREDENTIALS',
+            storage_path('app/google/avance-4-ec9701af2633.json')
+        ),
+    ],
     'apple' => [
         'client_id' => env('APPLE_CLIENT_ID'),
         'client_secret' => env('APPLE_CLIENT_SECRET'),
@@ -65,5 +73,5 @@ return [
         'key_id' => env('APPLE_KEY_ID'),
         'private_key' => env('APPLE_PRIVATE_KEY'),
         'redirect' => env('APPLE_REDIRECT_URI'),
-    ]
+    ],
 ];

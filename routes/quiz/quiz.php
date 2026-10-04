@@ -25,5 +25,8 @@ Route::middleware('validateToken')->group(function () {
     Route::post('exam',[QuestionController::class, 'saveExamRegister'])->middleware('throttle:exam');
     Route::patch('exam/status',[QuestionController::class, 'updateExamStatus'])->middleware('throttle:exam-status');
     Route::get('exam',[QuestionController::class, 'getUserExams'])->middleware('throttle:exam-user');
+    Route::get('exam/{uuid}', [QuestionController::class, 'getUserExam'])
+        ->whereUuid('uuid')
+        ->middleware('throttle:exam-user');
     Route::post('exam/download-summary',[QuestionController::class, 'downloadExamSummary'])->middleware('throttle:exam-download-summary');
 });

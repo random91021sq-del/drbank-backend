@@ -1353,21 +1353,20 @@ class QuestionController extends Controller
      *             @OA\Property(
      *                 property="exam_summary",
      *                 type="array",
-     *                 description="Resumen detallado de cada pregunta del examen con la respuesta correcta y la respuesta del usuario",
+     *                 description="Resumen de cada pregunta con la respuesta del usuario. La respuesta correcta es resuelta por el backend.",
      *
      *                 @OA\Items(
      *                     type="object",
-     *                     required={"question_id", "correct_answer", "response"},
+     *                     required={"question_id", "response"},
      *
      *                     @OA\Property(property="question_id", type="integer", example=101, description="ID de la pregunta"),
-     *                     @OA\Property(property="correct_answer", type="string", example="A", description="Respuesta correcta de la pregunta"),
      *                     @OA\Property(property="response", type="string", example="B", description="Respuesta seleccionada por el usuario")
      *                 ),
      *                 example={
-     *                     {"question_id": 101, "correct_answer": "A", "response": "A"},
-     *                     {"question_id": 102, "correct_answer": "B", "response": "C"},
-     *                     {"question_id": 103, "correct_answer": "C", "response": ""},
-     *                     {"question_id": 104, "correct_answer": "D", "response": "D"}
+     *                     {"question_id": 101, "response": "A"},
+     *                     {"question_id": 102, "response": "C"},
+     *                     {"question_id": 103, "response": ""},
+     *                     {"question_id": 104, "response": "D"}
      *                 }
      *             )
      *         )
@@ -1438,6 +1437,7 @@ class QuestionController extends Controller
         try {
             $exam = Exam::create([
                 'id_client' => auth('sanctum')->user()->id_client,
+                'id_study_block'=>$request->study_block,
                 'exam_type' => $request->exam_type,
                 'title' => $request->title,
                 'total_questions' => $request->total_questions,
@@ -1513,17 +1513,16 @@ class QuestionController extends Controller
      *
      *                 @OA\Items(
      *                     type="object",
-     *                     required={"question_id", "correct_answer", "response"},
+     *                     required={"question_id", "response"},
      *
      *                     @OA\Property(property="question_id", type="integer", example=101, description="ID de la pregunta"),
-     *                     @OA\Property(property="correct_answer", type="string", example="A", description="Respuesta correcta de la pregunta"),
      *                     @OA\Property(property="response", type="string", example="B", description="Respuesta seleccionada por el usuario")
      *                 ),
      *                 example={
-     *                     {"question_id": 101, "correct_answer": "A", "response": "A"},
-     *                     {"question_id": 102, "correct_answer": "B", "response": "C"},
-     *                     {"question_id": 103, "correct_answer": "C", "response": ""},
-     *                     {"question_id": 104, "correct_answer": "D", "response": "D"}
+     *                     {"question_id": 101, "response": "A"},
+     *                     {"question_id": 102, "response": "C"},
+     *                     {"question_id": 103, "response": ""},
+     *                     {"question_id": 104, "response": "D"}
      *                 }
      *             ),
      *             @OA\Property(
@@ -1604,9 +1603,19 @@ class QuestionController extends Controller
             if (! $exam) {
                 return CustomResponse::responseMessage('notFoundRegister', Response::HTTP_BAD_REQUEST, $language);
             }
+            $examSummary = collect($request->exam_summary)
+                ->map(function ($answer) {
+                    $item = is_array($answer) ? $answer : (array) $answer;
+                    unset($item['correct_answer']);
+
+                    return $item;
+                })
+                ->values()
+                ->all();
+
             $exam->score_percentage = $request->score_percentage;
             $exam->time_spent = $request->time_spent;
-            $exam->exam_summary = $request->exam_summary;
+            $exam->exam_summary = $examSummary;
             $exam->completed_at = Carbon::parse($request->completed_at)->setTimezone('America/Lima')
                                   ->format('Y-m-d H:i:s');
             $exam->status = $request->status;
@@ -1625,7 +1634,7 @@ class QuestionController extends Controller
      *     path="/api/v1/quiz/exam",
      *     tags={"Quiz"},
      *     summary="Obtener exámenes del usuario",
-     *     description="Obtiene el historial de exámenes realizados por el usuario autenticado. Puede filtrar opcionalmente por tipo de examen.",
+     *     description="Obtiene el historial paginado de exámenes realizados por el usuario autenticado. Puede filtrar opcionalmente por tipo de examen.",
      *     security={{"bearerAuth": {}}},
      *
      *     @OA\Parameter(
@@ -1739,7 +1748,19 @@ class QuestionController extends Controller
     {
         $language = $request->query('lang', 'es');
         try {
-            $query = Exam::select(['uuid', 'title', 'total_questions', 'score_percentage', 'exam_summary', 'time_spent', 'started_at','recommendation' ,'completed_at', 'status'])
+            $query = Exam::select([
+                'uuid',
+                'exam_type',
+                'smart_review_stage',
+                'title',
+                'total_questions',
+                'score_percentage',
+                'time_spent',
+                'started_at',
+                'recommendation',
+                'completed_at',
+                'status',
+            ])
                 ->where('id_client', auth('sanctum')->user()->id_client)
                 ->orderBy('started_at', 'desc');
 
@@ -1755,6 +1776,53 @@ class QuestionController extends Controller
 
             return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/v1/quiz/exam/{uuid}",
+     *     summary="Obtener el detalle de un examen por UUID",
+     *     tags={"Quiz"},
+     *     security={{"bearerAuth": {}}},
+     *     @OA\Parameter(
+     *         name="uuid",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="string", format="uuid")
+     *     ),
+     *     @OA\Response(response=200, description="Detalle completo del examen"),
+     *     @OA\Response(response=404, description="Examen no encontrado")
+     * )
+     */
+    public function getUserExam(string $uuid)
+    {
+        $exam = Exam::select([
+            'uuid',
+            'title',
+            'total_questions',
+            'score_percentage',
+            'exam_summary',
+            'time_spent',
+            'started_at',
+            'recommendation',
+            'completed_at',
+            'status',
+        ])
+            ->where('id_client', auth('sanctum')->user()->id_client)
+            ->where('uuid', $uuid)
+            ->first();
+
+        if (! $exam) {
+            return CustomResponse::responseBody([
+                'status' => false,
+                'message' => 'No se encontró el examen solicitado.',
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        return CustomResponse::responseBody([
+            'status' => true,
+            'data' => $exam,
+        ], Response::HTTP_OK);
     }
 
     /**

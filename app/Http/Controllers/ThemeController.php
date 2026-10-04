@@ -10,7 +10,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ThemeController extends Controller
 {
-
     /**
      * @OA\Get(
      *     path="/api/v1/quiz/theme",
@@ -18,27 +17,44 @@ class ThemeController extends Controller
      *     tags={"Quiz"},
      *     description="Retorna un grupo de temas basados en la especialidad proporcionada",
      *     security={{"bearerAuth": {}}},
+     *
      *     @OA\Parameter(
      *         name="lang",
      *         in="query",
      *         description="Idioma",
      *         required=false,
+     *
      *         @OA\Schema(type="string")
      *     ),
+     *
      *     @OA\Parameter(
      *         name="specialty",
      *         in="query",
      *         description="Id de la especialidad",
      *         required=true,
+     *
      *         @OA\Schema(type="integer")
      *     ),
+     *
+     *     @OA\Parameter(
+     *         name="exam",
+     *         in="query",
+     *         description="Tipo de examen que debe tener preguntas activas",
+     *         required=true,
+     *
+     *         @OA\Schema(type="string", example="Residentado Médico")
+     *     ),
+     *
      * @OA\Response(
      *     response=200,
      *     description="Listado de temas obtenido exitosamente",
+     *
      *     @OA\JsonContent(
      *         type="array",
+     *
      *         @OA\Items(
      *             type="object",
+     *
      *             @OA\Property(property="themeId", type="integer", example=1),
      *             @OA\Property(property="theme", type="string", example="ANATOMÍA ENAM"),
      *             @OA\Property(property="code", type="string", nullable=true, example=null),
@@ -57,10 +73,13 @@ class ThemeController extends Controller
      *         }
      *     )
      * ),
+     *
      *     @OA\Response(
      *         response=401,
      *         description="No autorizado",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(
      *                 property="message",
      *                 type="string",
@@ -68,24 +87,33 @@ class ThemeController extends Controller
      *             )
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=400,
      *         description="No se encontraron preguntas",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="No se encontraron registros")
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=429,
      *         description="Se superó el limite de peticiones",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Se superó el limite de peticiones")
      *         )
      *     ),
+     *
      *     @OA\Response(
      *         response=500,
      *         description="Error del servidor",
+     *
      *         @OA\JsonContent(
+     *
      *             @OA\Property(property="message", type="string", example="Ocurrio un error, intentelo nuevamente")
      *         )
      *     )
@@ -98,8 +126,12 @@ class ThemeController extends Controller
             $themes = DB::table('questions')
                 ->join('themes', 'questions.id_theme', '=', 'themes.id_theme')
                 ->join('specialties', 'themes.id_specialty', '=', 'specialties.id_specialty')
+                ->join('areas', 'specialties.id_area', '=', 'areas.id_area')
                 ->where('questions.id_exam_type', $request->exam)
                 ->where('questions.status', 1)
+                ->where('themes.status', 1)
+                ->where('specialties.status', 1)
+                ->where('areas.status', 1)
                 ->where('themes.id_specialty', $request->specialty)
                 ->when($request->filled('area'), function ($query) use ($request) {
                     $query->where('specialties.id_area', $request->area);
@@ -109,14 +141,16 @@ class ThemeController extends Controller
                 })
                 ->select('themes.theme', 'themes.uuid AS id')
                 ->distinct()
-                ->orderBy('themes.theme')
+                ->orderBy('themes.theme', 'asc')
                 ->get();
             if ($themes->isEmpty()) {
                 return CustomResponse::responseMessage('notFoundRegister', Response::HTTP_BAD_REQUEST, $language);
             }
+
             return CustomResponse::responseBody($themes, 200);
         } catch (\Throwable $th) {
-            Log::info('Error en listThemes: ' . $th->getMessage());
+            Log::info('Error en listThemes: '.$th->getMessage());
+
             return CustomResponse::responseMessage('serverError', 500, $language);
         }
     }

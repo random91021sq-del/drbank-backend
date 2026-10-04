@@ -25,6 +25,14 @@ class AreaController extends Controller
      *         required=false,
      *         @OA\Schema(type="string")
      *     ),
+     *     @OA\Parameter(
+     *         name="exam",
+     *         in="query",
+     *         description="Id del examen",
+     *         required=true,
+     *
+     *         @OA\Schema(type="string")
+     *     ),
      * @OA\Response(
      *     response=200,
      *     description="Listado de áreas obtenido exitosamente",
@@ -79,19 +87,21 @@ class AreaController extends Controller
     public function areas(AreaRequest $request)
     {
         try {
-            Log::info('request enviado: ' . json_encode($request->all()));
             $areas = DB::table('questions')
                 ->join('themes', 'questions.id_theme', '=', 'themes.id_theme')
                 ->join('specialties', 'themes.id_specialty', '=', 'specialties.id_specialty')
                 ->join('areas', 'specialties.id_area', '=', 'areas.id_area')
                 ->where('questions.id_exam_type', $request->exam)
                 ->where('questions.status', 1)
+                ->where('themes.status', 1)
+                ->where('specialties.status', 1)
+                ->where('areas.status', 1)
                 ->when($request->filled('year'), function ($query) use ($request) {
                     $query->whereIn('questions.year', (array) $request->year);
                 })
                 ->select('areas.id_area as id', 'areas.area as name')
                 ->distinct()
-                ->orderBy('areas.area')
+                ->orderBy('areas.area','asc')
                 ->get();
             return CustomResponse::responseBody($areas, Response::HTTP_OK);
         } catch (\Throwable $th) {

@@ -1,5 +1,7 @@
 <?php
 
+use App\Jobs\DispatchDueSmartReviewPosttestsJob;
+use App\Jobs\GenerateDailySmartReviewAssignmentsJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -22,12 +24,17 @@ Schedule::command('appointment-holds:cleanup')
     ->timezone('America/Lima')
     ->withoutOverlapping();
 
-Schedule::command('student:plan')
-    ->weeklyOn(1, '00:00')
+Schedule::command('student:recommendation')
+    ->everyThirtyMinutes()
     ->timezone('America/Lima')
     ->withoutOverlapping();
 
-Schedule::command('student:recommendation')
-    ->everyThirtyMinutes()
+Schedule::job(new DispatchDueSmartReviewPosttestsJob)
+    ->everyMinute()
+    ->timezone('America/Lima')
+    ->withoutOverlapping();
+
+Schedule::job(new GenerateDailySmartReviewAssignmentsJob)
+    ->dailyAt('00:00')
     ->timezone('America/Lima')
     ->withoutOverlapping();

@@ -41,7 +41,14 @@ class CustomResponse
 
     public static function responseBody($body, $status)
     {
-        return response()->json($body, $status);
+        return response()->json(
+            $body,
+            $status,
+            [],
+            JSON_UNESCAPED_UNICODE
+                | JSON_UNESCAPED_SLASHES
+                | JSON_INVALID_UTF8_SUBSTITUTE
+        );
     }
 
     public static function responseValidation($message, $lang)
