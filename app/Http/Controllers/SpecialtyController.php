@@ -7,6 +7,7 @@ use App\Http\Requests\SpecialtyListRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Str;
 
 class SpecialtyController extends Controller
 {
@@ -124,7 +125,7 @@ class SpecialtyController extends Controller
                 ->where('themes.status', 1)
                 ->where('specialties.status', 1)
                 ->where('areas.status', 1)
-                ->where('specialties.id_area', $request->area)
+                ->whereIn('specialties.id_area', $request->area)
                 ->when($request->filled('year'), function ($query) use ($request) {
                     $query->whereIn('questions.year', (array) $request->year);
                 })
@@ -135,7 +136,7 @@ class SpecialtyController extends Controller
                 ->map(function ($item) {
                     return [
                         'id' => (int) $item->id,
-                        'name' => $item->name,
+                        'name' => Str::title($item->name),
                     ];
                 });
             if ($specialtiesTable->isEmpty()) {

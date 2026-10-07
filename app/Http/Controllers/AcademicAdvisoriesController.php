@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Custom\CustomResponse;
+use App\Http\Requests\HoldMeetingSlotRequest;
+use App\Http\Requests\RegisterMeetingRequest;
 use App\Models\AcademicAdvisories;
 use App\Models\AppointmentSlotHold;
 use App\Models\Doctor;
@@ -16,12 +18,16 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
+/* Controlador encargado de gestionar el proceso de asesorias académicas */
 class AcademicAdvisoriesController extends Controller
 {
+    /* Zona horaria para las operaciones */
     private const PERU_TIMEZONE = 'America/Lima';
 
+    /* Duración de cada asesoria */
     private const SLOT_DURATION_MINUTES = 60;
 
+    /* Tiempo de reserva temporal al seleccionar un horario */
     private const HOLD_MINUTES = 5;
 
     /**
@@ -150,10 +156,20 @@ class AcademicAdvisoriesController extends Controller
      *     )
      * )
      */
+
+    /*
+    * Lista las asesorias académicas agendadas por el estudiante autenticado.
+    */
     public function listAcademicAdvisories(Request $request)
     {
         try {
+            /*
+            * Obtiene el ID del cliente autenticado
+            */
             $client_id = auth('sanctum')->user()->id_client;
+            /*
+            * Busca las asesorias pertenecientes al usuario autenticado con el doctor correspondiente
+            */
             $academicAdvisories = AcademicAdvisories::where('client_id', $client_id)
                 ->join('doctors', 'academic_advisories.doctor_id', '=', 'doctors.id')
                 ->get([
@@ -164,7 +180,9 @@ class AcademicAdvisoriesController extends Controller
                     DB::raw('CONCAT(doctors.first_name, " ", doctors.last_name) as doctor_name'),
                     'doctors.specialty as doctor_specialty',
                 ]);
-
+            /*
+            * Retorna la lista de asesorias académicas
+            */
             return CustomResponse::responseBody($academicAdvisories, Response::HTTP_OK);
         } catch (\Throwable $th) {
             Log::info('Error en listado de asesorías académicas: '.$th->getMessage());
@@ -210,63 +228,99 @@ class AcademicAdvisoriesController extends Controller
      *     @OA\Response(response=500, description="Error del servidor")
      * )
      */
-    public function holdMeetingSlot(Request $request)
+    /*
+    * Bloquea temporalmente un horario de asesoria
+    */
+    public function holdMeetingSlot(HoldMeetingSlotRequest $request)
     {
-        $validated = $request->validate([
-            'doctor_id' => ['required', 'integer', 'exists:doctors,id'],
-            'scheduled_at' => ['required', 'date_format:Y-m-d H:i:s'],
-        ]);
-
         try {
+            /*
+            * Obtiene al usuario autenticado
+            */
             $client = auth('sanctum')->user();
+            /*
+            * Obtiene la hora y fecha actual en zona horaria peruana
+            */
             $nowPeru = CarbonImmutable::now(self::PERU_TIMEZONE);
+            /*
+            * Convierte la fecha y hora seleccionada por el estudiante a una zona horaria peruana
+            */
             $slotStart = CarbonImmutable::createFromFormat(
                 'Y-m-d H:i:s',
-                $validated['scheduled_at'],
+                $request->scheduled_at,
                 self::PERU_TIMEZONE
             );
+            /*
+            * Calcula la hora de finalización del horario
+            */
             $slotEnd = $slotStart->addMinutes(self::SLOT_DURATION_MINUTES);
-
+            /*
+            * Impide reservar horarios que ya pasaron o exactamente en el momento actual 
+            */
             if ($slotStart->lessThanOrEqualTo($nowPeru)) {
                 return CustomResponse::responseBody([
                     'message' => 'El horario seleccionado ya pasó.',
                 ], Response::HTTP_BAD_REQUEST);
             }
-
+            /*
+            * Valida que el rango de horario seleccionado este 
+            * dentro del rango de disponibilidad del médico
+            */
             $isWithinAvailability = DB::table('doctor_availabilities')
-                ->where('doctor_id', $validated['doctor_id'])
-                ->where('day_of_week', $slotStart->dayOfWeekIso)
+                ->where('doctor_id', $request->doctor_id)
+                ->where('day_of_week', $slotStart->dayOfWeekIso) /*Devuelve el día de la semana en formato ISO Ej: 1->Lunes*/
                 ->where('is_active', 1)
                 ->where('start_time', '<=', $slotStart->format('H:i:s'))
                 ->where('end_time', '>=', $slotEnd->format('H:i:s'))
                 ->exists();
-
+            /*
+            *  Impide reservar horarios que no estén dentro de la disponibilidad del médico
+            */
             if (! $isWithinAvailability) {
                 return CustomResponse::responseBody([
                     'message' => 'El horario seleccionado no está dentro de la disponibilidad del doctor.',
                 ], Response::HTTP_BAD_REQUEST);
             }
-
-            return DB::transaction(function () use ($client, $validated, $slotStart, $slotEnd, $nowPeru) {
-                AppointmentSlotHold::where('doctor_id', $validated['doctor_id'])
+            /*
+            * Se inicia una transacción para realizar de forma segura 
+            * la comprobación y registro del bloqueo temporal
+            */
+            return DB::transaction(function () use ($client, $request, $slotStart, $slotEnd, $nowPeru) {
+                /*
+                * Remueve cualquier bloqueo temporal que haya expirado para el mismo doctor y horario
+                */
+                AppointmentSlotHold::where('doctor_id', $request->doctor_id)
                     ->where('scheduled_at', $slotStart)
                     ->where('expires_at', '<=', $nowPeru)
                     ->delete();
-
-                $appointments = AcademicAdvisories::where('doctor_id', $validated['doctor_id'])
+                /*
+                * Obtiene las asesorias agendadas para el mismo doctor y horario, excluyendo las canceladas
+                */
+                $appointments = AcademicAdvisories::where('doctor_id', $request->doctor_id)
                     ->whereBetween('scheduled_at', [$slotStart->startOfDay(), $slotStart->endOfDay()])
                     ->whereNotIn('status', ['cancelled', 'canceled'])
-                    ->lockForUpdate()
+                    ->lockForUpdate() /* Bloquea la fila para evitar problemas de actualización del registro*/
                     ->get(['scheduled_at', 'duration_minutes']);
-
-                $isTaken = $appointments->contains(function ($appointment) use ($slotStart, $slotEnd) {
+                /*
+                * Valida si el horario solicitado se cruza con alguna asesoria existente
+                */
+                $isTaken = $appointments->contains(function ($appointment) use ($slotStart, $slotEnd) { /*Colección de citas */
+                    /* Parsea la fecha y hora de la cita*/
                     $appointmentStart = CarbonImmutable::parse($appointment->scheduled_at, self::PERU_TIMEZONE);
+                    /*
+                    * Determina la fecha de finalización de la cita 
+                    */
                     $appointmentEnd = $appointmentStart->addMinutes((int) $appointment->duration_minutes);
-
+                    /*
+                    * Verifica si el nuevo horario que el usuario 
+                    * quiere reservar se cruza con una cita que ya existe
+                    */
                     return $slotStart->lessThan($appointmentEnd) && $slotEnd->greaterThan($appointmentStart);
                 });
-
-                if ($isTaken || AppointmentSlotHold::where('doctor_id', $validated['doctor_id'])
+                /*
+                * Verifica si el horario ya fue reservado por otro estudiante
+                 */
+                if ($isTaken || AppointmentSlotHold::where('doctor_id', $request->doctor_id)
                     ->where('scheduled_at', $slotStart)
                     ->where('expires_at', '>', $nowPeru)
                     ->exists()) {
@@ -274,15 +328,20 @@ class AcademicAdvisoriesController extends Controller
                         'message' => 'El horario acaba de ser reservado por otro estudiante.',
                     ], Response::HTTP_CONFLICT);
                 }
-
+                /*
+                * Registra la reserva temporal del horario
+                */
                 $hold = AppointmentSlotHold::create([
-                    'doctor_id' => $validated['doctor_id'],
+                    'doctor_id' => $request->doctor_id,
                     'client_id' => $client->id_client,
                     'scheduled_at' => $slotStart,
                     'expires_at' => $nowPeru->addMinutes(self::HOLD_MINUTES),
                     'token' => (string) Str::uuid(),
                 ]);
-
+                /*
+                * Retorna el token de la reserva temporal 
+                * y la fecha de expiración
+                */
                 return CustomResponse::responseBody([
                     'hold_token' => $hold->token,
                     'expires_at' => $hold->expires_at->format('Y-m-d H:i:s'),
@@ -331,8 +390,14 @@ class AcademicAdvisoriesController extends Controller
      *     @OA\Response(response=500, description="Error del servidor")
      * )
      */
+    /*
+    * Libera una reserva temporal de horario de asesoria
+    */
     public function releaseMeetingSlot(Request $request, string $hold_token)
     {
+        /*
+        * Valida que el token recibido sea un UUID válido
+        */
         if (! Str::isUuid($hold_token)) {
             return CustomResponse::responseBody([
                 'message' => 'El token de reserva no es válido.',
@@ -340,12 +405,19 @@ class AcademicAdvisoriesController extends Controller
         }
 
         try {
+            /*
+            * Obtiene el ID del usuario autenticado
+            */
             $clientId = auth('sanctum')->user()->id_client;
-
+            /*
+            * Busca la reserva temporal correspondiente al token y al usuario
+            */
             AppointmentSlotHold::where('token', $hold_token)
                 ->where('client_id', $clientId)
                 ->delete();
-
+            /*
+            * Retorna mensaje exitoso de la liberación
+            */
             return CustomResponse::responseBody([
                 'message' => 'Reserva liberada correctamente.',
             ], Response::HTTP_OK);
@@ -403,40 +475,45 @@ class AcademicAdvisoriesController extends Controller
      *     @OA\Response(response=500, description="Error del servidor")
      * )
      */
-    public function registerMeeting(Request $request)
+    /*
+    * Función encargada de registrar una asesoria académica
+    */
+    public function registerMeeting(RegisterMeetingRequest $request)
     {
-        $validated = $request->validate([
-            'hold_token' => ['required', 'uuid'],
-            'doctor_id' => ['required', 'integer', 'exists:doctors,id'],
-            'scheduled_at' => ['required', 'date_format:Y-m-d H:i:s'],
-            'reason' => ['required', 'string'],
-            'status' => ['nullable', 'string'],
-            'meeting_url' => ['nullable', 'url'],
-            'google_calendar_event_id' => ['nullable', 'string'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after:start_date'],
-            'title' => ['required', 'string'],
-        ]);
-
         try {
+            /*
+            * Obtiene al usuario autenticado
+            */
             $client = auth('sanctum')->user();
-            $doctor = Doctor::select('email')->findOrFail($validated['doctor_id']);
+            /*
+            Obtiene el correo electrónico del doctor
+            */
+            $doctor = Doctor::select('email')->findOrFail($request->doctor_id);
+            /*
+            * Convierte la fecha y hora programada a una zona horaria peruana 
+            */
             $scheduledAt = CarbonImmutable::createFromFormat(
                 'Y-m-d H:i:s',
-                $validated['scheduled_at'],
+                $request->scheduled_at,
                 self::PERU_TIMEZONE
             );
-
+            /*
+            * Inicia la transacción en la BD
+            */
             DB::beginTransaction();
-
-            $hold = AppointmentSlotHold::where('token', $validated['hold_token'])
+            /*
+            * Busca la reserva temporal correspondiente al usuario
+            */
+            $hold = AppointmentSlotHold::where('token', $request->hold_token)
                 ->where('client_id', $client->id_client)
-                ->where('doctor_id', $validated['doctor_id'])
+                ->where('doctor_id', $request->doctor_id)
                 ->where('scheduled_at', $scheduledAt)
                 ->where('expires_at', '>', CarbonImmutable::now(self::PERU_TIMEZONE))
-                ->lockForUpdate()
+                ->lockForUpdate() /*Bloquea el registro encontrado para que no se pueda modificar*/
                 ->first();
-
+            /*
+            *  Valida si no existe la reserva temporal(no existe,ya expiró)
+            */
             if (! $hold) {
                 DB::rollBack();
 
@@ -444,37 +521,43 @@ class AcademicAdvisoriesController extends Controller
                     'message' => 'La reserva temporal no existe o ya venció.',
                 ], Response::HTTP_CONFLICT);
             }
-
+            /*
+            * Se registra la asesoria académica en la BD
+            */
             $academicAdvisory = AcademicAdvisories::create([
                 'client_id' => $client->id_client,
-                'doctor_id' => $validated['doctor_id'],
+                'doctor_id' => $request->doctor_id,
                 'scheduled_at' => $scheduledAt,
                 'duration_minutes' => self::SLOT_DURATION_MINUTES,
-                'reason' => $validated['reason'],
-                'status' => $validated['status'] ?? 'pending',
-                'meeting_url' => $validated['meeting_url'] ?? null,
-                'google_calendar_event_id' => $validated['google_calendar_event_id'] ?? null,
+                'reason' => $request->reason,
+                'status' => $request->status ?? 'pending',
+                'meeting_url' => $request->meeting_url ?? null,
+                'google_calendar_event_id' => $request->google_calendar_event_id ?? null,
             ]);
-
-            // The record must be committed before Make calls updateMeeting from
-            // another HTTP request; otherwise that connection cannot see the ID.
+            /*
+            * Se elimina la reserva temporal de la asesoria registrada
+            */
             $hold->delete();
-            DB::commit();
+            DB::commit(); // Se confirma la transacción en la BD
 
             try {
+                /*
+                * Se envia la información de la asesoria al webhook de Make
+                */
                 $response = Http::timeout(45)
                     ->post('https://hook.us2.make.com/avcqe21c17l8157shgv661dhryk2pvi4', [
                         'student_email' => $client->email,
                         'doctor_email' => $doctor->email,
-                        'start_date' => $validated['start_date'],
-                        'end_date' => $validated['end_date'],
-                        'title' => $validated['title'],
+                        'start_date' => $request->start_date,
+                        'end_date' => $request->end_date,
+                        'title' => $request->title,
                         'academic-advisores' => $academicAdvisory->id,
                     ]);
-
+                //Si Make falla se genera una excepción y se captura en el catch
                 $response->throw();
-                $message = $response->json('message');
-
+                //Se obtiene el mensaje de respuesta del webhook
+                $message = $response->json('message')?? 'La asesoría fue registrada correctamente';
+                //Verifica que el mensaje sea una cadena de texto no vacía
                 if (! is_string($message) || trim($message) === '') {
                     throw new \RuntimeException('El webhook no devolvió un mensaje válido.');
                 }
@@ -484,9 +567,11 @@ class AcademicAdvisoriesController extends Controller
                     'message' => $webhookError->getMessage(),
                 ]);
 
-                $message = 'La asesoría fue registrada correctamente';
+                $message = 'No se pudo registrar la asesoria';
             }
-
+            /*
+            * Retorna el mensaje de éxito o error de la integración con Make
+            */
             return CustomResponse::responseBody([
                 'message' => $message,
             ], Response::HTTP_CREATED);
@@ -494,7 +579,6 @@ class AcademicAdvisoriesController extends Controller
             if (DB::transactionLevel() > 0) {
                 DB::rollBack();
             }
-
             Log::info('Error en registro de asesoría académica: '.$th->getMessage());
 
             return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $request->query('lang'));
@@ -544,15 +628,27 @@ class AcademicAdvisoriesController extends Controller
      *     @OA\Response(response=500, description="Error del servidor")
      * )
      */
+    
+    /*
+    * Actualiza el enlace de reunión y el identificador del evento de Google Calendar de una asesoría existente.
+    */
     public function updateMeeting(Request $request, int $id)
     {
         try {
+            /*
+            * Busca la asesoria academica por su identificador
+            */
             $academicAdvisory = AcademicAdvisories::findOrFail($id);
+            /*
+            * Actualiza los campos de la asesoria academica con los datos recibidos en la solicitud
+            */
             $academicAdvisory->update([
                 'meeting_url' => $request->meeting_url,
                 'google_calendar_event_id' => $request->google_calendar_event_id,
             ]);
-
+            /*
+            * Retorna un mensaje de éxito indicando que la asesoria fue actualizada correctamente
+            */
             return CustomResponse::responseMessage('meetingUpdated', Response::HTTP_OK, $request->query('lang'));
         } catch (ModelNotFoundException $th) {
             Log::warning('Asesoría académica no encontrada para actualización.', [

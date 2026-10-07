@@ -7,6 +7,7 @@ use App\Http\Requests\SpecialtyRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Str;
 
 class ThemeController extends Controller
 {
@@ -132,9 +133,9 @@ class ThemeController extends Controller
                 ->where('themes.status', 1)
                 ->where('specialties.status', 1)
                 ->where('areas.status', 1)
-                ->where('themes.id_specialty', $request->specialty)
+                ->whereIn('themes.id_specialty', $request->specialty)
                 ->when($request->filled('area'), function ($query) use ($request) {
-                    $query->where('specialties.id_area', $request->area);
+                    $query->whereIn('specialties.id_area', $request->area);
                 })
                 ->when($request->filled('year'), function ($query) use ($request) {
                     $query->whereIn('questions.year', (array) $request->year);
@@ -143,6 +144,11 @@ class ThemeController extends Controller
                 ->distinct()
                 ->orderBy('themes.theme', 'asc')
                 ->get();
+            $themes->transform(function ($theme) {
+                $theme->theme = Str::title($theme->theme);
+
+                return $theme;
+            });
             if ($themes->isEmpty()) {
                 return CustomResponse::responseMessage('notFoundRegister', Response::HTTP_BAD_REQUEST, $language);
             }

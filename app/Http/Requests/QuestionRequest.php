@@ -25,9 +25,12 @@ class QuestionRequest extends FormRequest
     {
         return [
             'lang' => ['alpha', 'size:' . env('DIGITS_LANGUAGE')],
-            'area' => ['nullable', 'numeric'],
-            'specialty' => ['nullable','numeric'],
-            'theme' => ['nullable','string'],
+            'area' => ['nullable', 'array'],
+            'area.*' => ['numeric'],
+            'specialty' => ['nullable','array'],
+            'specialty.*' => ['numeric'],
+            'theme' => ['nullable','array'],
+            'theme.*' => ['string'],
             'year' => ['nullable','array'],
             'year.*' => ['string'],
             'exam' => 'required|string',

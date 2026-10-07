@@ -28,7 +28,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
-
+/*
+* Controlador encargado de gestionar la autenticación de un usuario
+*/
 class AuthController extends Controller
 {
     /**
@@ -116,25 +118,45 @@ class AuthController extends Controller
      *     )
      * )
      */
+
+    /*
+    * Función encargada de registrar un nuevo usuario
+    */
     public function register(RegisterRequest $request)
     {
         $language = $request->query('lang');
         try {
+            //Genera una cadena aleatoria de 30 caracteres
             $rawPass = Str::random(30);
+            //Encripta la cadena aleatoria generada
             $hash = encrypt($rawPass);
+            //Genera un código de activación aleatorio de 6 caracteres en minúscula
             $activate = Str::lower(Str::random(6));
+            //Crea una instancia del modelo Client
             $client = new Client;
+            //Elimina los espacios en blanco a inicio y fin del campo nombre
             $client->name = trim($request->name);
+            //Elimina los espacios en blanco a inicio y fin del campo apellido
             $client->last_name = trim($request->last_name);
+            //Elimina los espacios en blanco a inicio y fin del campo correo electrónico
             $client->email = trim($request->email);
+            //Encripta la contraseña proporcionada por el usuario
             $client->password = Hash::make($request->password);
+            //Asigna el nivel de usuario
             $client->level = 1;
+            //Asigna el token de autenticación
             $client->token = $hash;
+            //Asigna el código de activación
             $client->code_active = $activate;
+            //Asigna la universidad
             $client->university = ! $request->university ? '' : $request->university;
+            //Asigna el estado de inicio de sesión social
             $client->social_login = 0;
+            //Asigna el estado de la cuenta como inactiva
             $client->status = 0;
+            //Guarda el nuevo usuario en la base de datos
             $client->save();
+            // Crea un arreglo con los datos del usuario y el código de activación
             $body = [
                 'type' => 1,
                 'name' => $client->name,
@@ -142,13 +164,12 @@ class AuthController extends Controller
                 'email' => $client->email,
                 'code_activate' => $activate,
             ];
-            // Enviamos a cola en google pub/sub
+            // Envía los datos a la cola de Google para enviar el correo electrónico de activación
             GoogleQueue::sendQueue([
                 'value' => $body,
             ]);
-
+            // Retorna mensaje de que se envió el correo de verificación
             return CustomResponse::responseMessage('sentVerification', Response::HTTP_CREATED, $language);
-            // return CustomResponse::sendEmail($language, $request->email, $client, 1);
         } catch (\Throwable $e) {
             Log::info('Error en register: '.$e->getMessage());
 

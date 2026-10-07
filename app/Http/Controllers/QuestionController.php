@@ -175,13 +175,13 @@ class QuestionController extends Controller
                 ->join('themes', 'questions.id_theme', '=', 'themes.id_theme')
                 ->join('specialties', 'themes.id_specialty', '=', 'specialties.id_specialty')
                 ->when(! empty($request->area), function ($query) use ($request) {
-                    $query->where('specialties.id_area', $request->area);
+                    $query->whereIn('specialties.id_area', $request->area);
                 })
                 ->when(! empty($request->specialty), function ($query) use ($request) {
-                    $query->where('specialties.id_specialty', $request->specialty);
+                    $query->whereIn('specialties.id_specialty', $request->specialty);
                 })
                 ->when(! empty($request->theme), function ($query) use ($request) {
-                    $query->where('themes.uuid', $request->theme);
+                    $query->whereIn('themes.uuid', $request->theme);
                 })
                 ->when(! empty($request->year), function ($query) use ($request) {
                     $query->whereIn('questions.year', $request->year);

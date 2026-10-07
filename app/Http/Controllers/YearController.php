@@ -103,13 +103,13 @@ class YearController extends Controller
                 ->where('questions.id_exam_type', $request->exam)
                 ->where('questions.status', 1)
                 ->when($request->filled('area'), function ($query) use ($request) {
-                    $query->where('specialties.id_area', $request->area);
+                    $query->whereIn('specialties.id_area', $request->area);
                 })
                 ->when($request->filled('specialty'), function ($query) use ($request) {
-                    $query->where('themes.id_specialty', $request->specialty);
+                    $query->whereIn('themes.id_specialty', $request->specialty);
                 })
                 ->when($request->filled('theme'), function ($query) use ($request) {
-                    $query->where('themes.uuid', $request->theme);
+                    $query->whereIn('themes.uuid', $request->theme);
                 })
                 ->select('questions.year')
                 ->whereNotNull('questions.year')

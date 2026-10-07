@@ -18,7 +18,8 @@ class SpecialtyListRequest extends FormRequest
         return [
             'lang' => ['nullable', 'alpha', 'size:'.env('DIGITS_LANGUAGE')],
             'exam' => ['required', 'string'],
-            'area' => ['required', 'integer'],
+            'area' => ['required', 'array'],
+            'area.*'=> ['integer'],
             'year' => ['nullable', 'array'],
             'year.*' => ['string'],
         ];

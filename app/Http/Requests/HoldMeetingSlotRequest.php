@@ -6,7 +6,7 @@ use App\Custom\CustomResponse;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
-class RegisterMeetingRequest extends FormRequest
+class HoldMeetingSlotRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -24,16 +24,8 @@ class RegisterMeetingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'hold_token' => ['required','uuid'],
             'doctor_id' => ['required', 'integer', 'exists:doctors,id'],
             'scheduled_at' => ['required', 'date_format:Y-m-d H:i:s'],
-            'reason' => ['required', 'string'],
-            'status' => ['required', 'string'],
-            'meeting_url' => ['nullable', 'url'],
-            'google_calendar_event_id'=> ['nullable', 'string'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date','after:start_date'],
-            'title' => ['required', 'string'],
         ];
     }
 
@@ -42,19 +34,15 @@ class RegisterMeetingRequest extends FormRequest
         $language = $this->query('lang');
 
         return [
+            'alpha' => CustomResponse::responseValidation('lang', $language),
             'required' => CustomResponse::responseValidation('required', $language),
-            'uuid' => CustomResponse::responseValidation('uuid', $language),
-            'integer' => CustomResponse::responseValidation('integer', $language),
             'date_format' => CustomResponse::responseValidation('date_format', $language),
+            'integer' => CustomResponse::responseValidation('integer', $language),
             'exists' => CustomResponse::responseValidation('exists', $language),
-            'string' => CustomResponse::responseValidation('string', $language),
-            'date' => CustomResponse::responseValidation('date', $language),
-            'after' => CustomResponse::responseValidation('after', $language),
         ];
     }
 
-    protected function failedValidation(Validator $validator): void
+    public function failedValidation(Validator $validator)
     {
         CustomResponse::failValidation($validator);
-    }
-}
+    }}
