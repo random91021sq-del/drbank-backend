@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -32,8 +33,10 @@ class SmartReviewPosttestService
             if (! $block || empty($block->pretest_completed_at)) {
                 throw new \RuntimeException('POSTTEST_BLOCK_NOT_READY');
             }
+            
+            $endOfToday = now('America/Lima')->endOfDay();
 
-            if (empty($block->posttest_available_at) || now()->lt($block->posttest_available_at)) {
+            if (empty($block->posttest_available_at) || Carbon::parse($block->posttest_available_at,'America/Lima')->gt($endOfToday)) {
                 throw new \RuntimeException('POSTTEST_NOT_AVAILABLE');
             }
 

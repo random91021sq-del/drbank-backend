@@ -12,13 +12,13 @@ class DispatchDueSmartReviewPosttestsJob implements ShouldQueue
 
     public function handle(): void
     {
-        $today = now('America/Lima')->toDateString();
+       $endOfToday = now('America/Lima')->endOfDay();
 
         DB::table('study_blocks as sb')
             ->where('sb.status', 'active')
             ->whereNotNull('sb.pretest_completed_at')
             ->whereNotNull('sb.posttest_available_at')
-            ->whereDate('sb.posttest_available_at', '<=', $today)
+            ->where('sb.posttest_available_at', '<=', $endOfToday)
             ->whereNotExists(function ($query) {
                 $query->selectRaw('1')
                     ->from('exams as e')
