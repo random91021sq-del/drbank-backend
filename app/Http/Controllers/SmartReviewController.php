@@ -2833,7 +2833,12 @@ class SmartReviewController extends Controller
             ], Response::HTTP_CONFLICT);
         }
 
-        if (empty($block->posttest_available_at) || now()->lt($block->posttest_available_at)) {
+        $endOfToday = now('America/Lima')->endOfDay();
+        $posttestAvailableAt = Carbon::parse(
+            $block->posttest_available_at,
+            'America/Lima'
+        );
+        if (empty($block->posttest_available_at) || $posttestAvailableAt->gt($endOfToday)) {
             return response()->json([
                 'status' => false,
                 'message' => 'La evaluación de progreso todavía no está disponible.',
@@ -3102,9 +3107,9 @@ class SmartReviewController extends Controller
                     throw new \RuntimeException('PRETEST_REQUIRED');
                 }
 
-                $now = now();
+                $endOfToday = now('America/Lima')->endOfDay();
 
-                if (empty($block->posttest_available_at) || $now->lt($block->posttest_available_at)) {
+                if (empty($block->posttest_available_at) || Carbon::parse($block->posttest_available_at, 'America/Lima')->gt($endOfToday)) {
                     throw new \RuntimeException('POSTTEST_NOT_AVAILABLE');
                 }
 
@@ -3192,13 +3197,13 @@ class SmartReviewController extends Controller
                         'status' => 'completed',
                         'started_at' => $startedAt,
                         'completed_at' => $completedAt,
-                        'updated_at' => $now,
+                        'updated_at' => now(),
                     ]);
 
                 $blockUpdate = [
                     'posttest_completed_at' => $completedAt,
                     'posttest_available_at' => $nextPosttestAt,
-                    'updated_at' => $now,
+                    'updated_at' => now(),
                 ];
 
                 DB::table('study_blocks')
