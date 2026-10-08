@@ -2992,20 +2992,7 @@ class SmartReviewController extends Controller
      *
      *         @OA\JsonContent(
      *
-     *             @OA\Property(property="status", type="boolean", example=true),
-     *             @OA\Property(property="message", type="string", example="Evaluación de progreso registrada correctamente."),
-     *             @OA\Property(
-     *                 property="data",
-     *                 type="object",
-     *                 @OA\Property(property="id_exam", type="integer", example=81),
-     *                 @OA\Property(property="id_study_block", type="integer", example=15),
-     *                 @OA\Property(property="correct_answers", type="integer", example=38),
-     *                 @OA\Property(property="total_questions", type="integer", example=50),
-     *                 @OA\Property(property="score_percentage", type="number", format="float", example=76),
-     *                 @OA\Property(property="first_posttest", type="boolean", example=true),
-     *                 @OA\Property(property="new_block_unlocked", type="boolean", example=true),
-     *                 @OA\Property(property="next_posttest_at", type="string", format="date-time", example="2026-10-23 14:30:00")
-     *             )
+     *             @OA\Property(property="message", type="string", example="Evaluación de progreso registrada correctamente.")
      *         )
      *     ),
      *
@@ -3078,7 +3065,7 @@ class SmartReviewController extends Controller
         ]);
 
         try {
-            $result = DB::transaction(function () use (
+            $isLatestBlock = DB::transaction(function () use (
                 $idClient,
                 $idStudyBlock,
                 $validated,
@@ -3179,12 +3166,11 @@ class SmartReviewController extends Controller
                 $completedAt = Carbon::parse($validated['completed_at'])
                     ->setTimezone('America/Lima');
                 $nextPosttestAt = $completedAt->copy()->addDays(28);
-                $firstPosttest = ! DB::table('exams')
+                $latestBlockId = DB::table('study_blocks')
                     ->where('id_client', $idClient)
-                    ->where('id_study_block', $idStudyBlock)
-                    ->where('smart_review_stage', 'posttest')
-                    ->where('status', 'completed')
-                    ->exists();
+                    ->orderByDesc('id_study_block')
+                    ->value('id_study_block');
+                $isLatestBlock = (int) $latestBlockId === $idStudyBlock;
 
                 DB::table('exams')
                     ->where('id_exam', $posttest->id_exam)
@@ -3211,23 +3197,29 @@ class SmartReviewController extends Controller
                     ->where('id_client', $idClient)
                     ->update($blockUpdate);
 
-                return [
-                    'id_exam' => (int) $posttest->id_exam,
-                    'title' => $validated['title'],
-                    'id_study_block' => $idStudyBlock,
-                    'correct_answers' => $correctAnswers,
-                    'total_questions' => $answers->count(),
-                    'score_percentage' => $scorePercentage,
-                    'first_posttest' => $firstPosttest,
-                    'new_block_unlocked' => $firstPosttest,
-                    'next_posttest_at' => $nextPosttestAt->toDateTimeString(),
-                ];
+                return $isLatestBlock;
             });
 
+            if ($isLatestBlock) {
+                try {
+                    GoogleQueue::sendQueue([
+                        'value' => [
+                            'type' => 6,
+                            'id_client' => $idClient,
+                            'id_study_block' => $idStudyBlock,
+                        ],
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::error('No se pudo publicar la notificación de desbloqueo en Google Pub/Sub.', [
+                        'id_client' => $idClient,
+                        'id_study_block' => $idStudyBlock,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             return response()->json([
-                'status' => true,
                 'message' => 'Evaluación de progreso registrada correctamente.',
-                'data' => $result,
             ]);
         } catch (\RuntimeException $e) {
             $knownErrors = [

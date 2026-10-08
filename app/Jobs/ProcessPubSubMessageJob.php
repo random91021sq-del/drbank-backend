@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Custom\CustomResponse;
+use App\Services\FirebaseNotificationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +43,7 @@ class ProcessPubSubMessageJob implements ShouldQueue
                 3 => $this->sendEmailDownloadExamSummary($notificationData),
                 4 => $this->sendEmailSupport($notificationData),
                 5 => $this->processSmartReviewPretest($notificationData),
+                6 => $this->sendNewStudyBlockNotification($notificationData),
                 default => Log::warning('PubSub Job: Tipo no reconocido', [
                     'type' => $notificationData['value']['type'],
                 ]),
@@ -109,6 +111,26 @@ class ProcessPubSubMessageJob implements ShouldQueue
             'reason' => $data['value']['reason'] ?? '',
             'description' => $data['value']['description'] ?? '',
         ], 4);
+    }
+
+    protected function sendNewStudyBlockNotification(array $data): void
+    {
+        $idClient = (int) ($data['value']['id_client'] ?? 0);
+
+        if (! $idClient) {
+            throw new \RuntimeException('PubSub SmartReview: No se encontró el cliente para la notificación.');
+        }
+
+        app(FirebaseNotificationService::class)->notifyClients(
+            [$idClient],
+            'Nuevo bloque de estudio disponible',
+            'Felicidades, has activado la opción de crear un nuevo bloque de estudio.'
+        );
+
+        Log::info('SmartReview: notificación de nuevo bloque enviada', [
+            'id_client' => $idClient,
+            'id_study_block' => (int) ($data['value']['id_study_block'] ?? 0),
+        ]);
     }
 
     protected function calculateSmartReviewQuality(bool $isCorrect, string $difficulty): int
