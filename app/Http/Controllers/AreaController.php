@@ -131,7 +131,9 @@ class AreaController extends Controller
                 ->distinct()
                 ->orderBy('areas.area', 'asc')
                 ->get();
-
+            /*
+            * Convierte cada palabra del nombre del área a mayúscula
+            */
             $areas->transform(function ($area) {
                 $area->name = Str::title($area->name);
 

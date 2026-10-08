@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
+
 /*
 * Controlador encargado de gestionar la autenticación de un usuario
 */
@@ -126,35 +127,35 @@ class AuthController extends Controller
     {
         $language = $request->query('lang');
         try {
-            //Genera una cadena aleatoria de 30 caracteres
+            // Genera una cadena aleatoria de 30 caracteres
             $rawPass = Str::random(30);
-            //Encripta la cadena aleatoria generada
+            // Encripta la cadena aleatoria generada
             $hash = encrypt($rawPass);
-            //Genera un código de activación aleatorio de 6 caracteres en minúscula
+            // Genera un código de activación aleatorio de 6 caracteres en minúscula
             $activate = Str::lower(Str::random(6));
-            //Crea una instancia del modelo Client
+            // Crea una instancia del modelo Client
             $client = new Client;
-            //Elimina los espacios en blanco a inicio y fin del campo nombre
+            // Elimina los espacios en blanco a inicio y fin del campo nombre
             $client->name = trim($request->name);
-            //Elimina los espacios en blanco a inicio y fin del campo apellido
+            // Elimina los espacios en blanco a inicio y fin del campo apellido
             $client->last_name = trim($request->last_name);
-            //Elimina los espacios en blanco a inicio y fin del campo correo electrónico
+            // Elimina los espacios en blanco a inicio y fin del campo correo electrónico
             $client->email = trim($request->email);
-            //Encripta la contraseña proporcionada por el usuario
+            // Encripta la contraseña proporcionada por el usuario
             $client->password = Hash::make($request->password);
-            //Asigna el nivel de usuario
+            // Asigna el nivel de usuario
             $client->level = 1;
-            //Asigna el token de autenticación
+            // Asigna el token de autenticación
             $client->token = $hash;
-            //Asigna el código de activación
+            // Asigna el código de activación
             $client->code_active = $activate;
-            //Asigna la universidad
+            // Asigna la universidad
             $client->university = ! $request->university ? '' : $request->university;
-            //Asigna el estado de inicio de sesión social
+            // Asigna el estado de inicio de sesión social
             $client->social_login = 0;
-            //Asigna el estado de la cuenta como inactiva
+            // Asigna el estado de la cuenta como inactiva
             $client->status = 0;
-            //Guarda el nuevo usuario en la base de datos
+            // Guarda el nuevo usuario en la base de datos
             $client->save();
             // Crea un arreglo con los datos del usuario y el código de activación
             $body = [
@@ -168,6 +169,7 @@ class AuthController extends Controller
             GoogleQueue::sendQueue([
                 'value' => $body,
             ]);
+
             // Retorna mensaje de que se envió el correo de verificación
             return CustomResponse::responseMessage('sentVerification', Response::HTTP_CREATED, $language);
         } catch (\Throwable $e) {
@@ -267,33 +269,76 @@ class AuthController extends Controller
      *     )
      * )
      */
+    /*
+    * Función encargada de autenticar a un usuario existente y activo
+    */
     public function login(LoginRequest $request): JsonResponse
     {
+        /*
+        * Obtiene el idioma por query param
+        */
         $language = $request->query('lang');
         try {
+            /*
+            * Inicializamos la variable de respuesta
+            */
             $response = null;
+            /*
+            * Obtiene el cliente por su correo electrónico
+            */
             $client = Client::select(['id_client', 'social_login'])->firstWhere('email', $request->email);
-            if ($request->token_fcm && ! $request->id) {
+            /*
+            * Verifica si se envia un token de firebase
+            */
+            if ($request->token_fcm) {
+                /*
+                * Crea una instancia del modelo ClientFirebases
+                */
                 $clientFirebase = new ClientFirebases;
+                /*
+                * Asigna el id del cliente al modelo ClientFirebases
+                */
                 $clientFirebase->id_client = $client->id_client;
+                /*
+                * Asigna el token de firebase al modelo ClientFirebases
+                 */
                 $clientFirebase->token_firebase = $request->token_fcm;
+                /*
+                * Guarda el registro del token de firebase en la base de datos
+                 */
                 $clientFirebase->save();
             }
+            /*
+            * Calcula la fecha y hora de expiración del token
+            */
             $expired_at = now()->addHours((int) env('EXPIRED_TOKEN', 24));
+            /*
+            * Genera un token de acceso mediante Laravel Sanctum
+            */
             $token = $client->createToken(env('APP_NAME'), ['*'], $expired_at)->plainTextToken;
-
+            /*
+            * Prepara el cuerpo de la respuesta
+            */
             $body = [
                 'access_token' => $token,
                 'token_type' => 'Bearer',
                 'social_login' => (int) $client->social_login,
             ];
-
+            /*
+            * Genera una respuesta HTTP con las credenciales de autenticación
+            */
             $response = CustomResponse::responseDefault($body, Response::HTTP_OK);
         } catch (\Throwable $e) {
             Log::info('Error en login: '.$e->getMessage());
+            /*
+            * Genera una respuesta HTTP con el mensaje de error
+            */
             $response = CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
 
+        /*
+        * Retorna la respuesta HTTP con las credenciales de autenticación o el mensaje de error
+        */
         return $response;
     }
 
@@ -356,31 +401,60 @@ class AuthController extends Controller
      *     )
      * )
      */
+    
+    /*
+    * Función encargada de renovar el token de acceso de estudiante 
+    */
     public function refresh(LanguageRequest $request): JsonResponse
     {
+        /*
+        * Obtiene el idioma enviado por query param
+        */
         $language = $request->query('lang');
         try {
+            /*
+            * Obtiene el token de autenticación enviado en el encabezado de la solicitud
+            */
             $token = $request->bearerToken();
+            /*
+            * Busca el token recibido en la tabla
+            */
             $issuedTokens = PersonalAccessToken::findToken($token);
-
+            /*
+            * Verifica si el token no fue encontrado
+            */
             if (! $issuedTokens) {
+                //Si no existe devuelve un mensaje de token inválido
                 return CustomResponse::responseMessage('invalidToken', Response::HTTP_BAD_REQUEST, $language);
             }
-
+            /*
+            * Busca el cliente asociado al token 
+            */
             $client = Client::select('id_client')->find($issuedTokens->tokenable_id);
+            /*
+            * Elimina el token anterior de la base de datos
+            */
             $issuedTokens->delete();
+            /*
+            * Calcula la fecha y hora de expiración del nuevo token de acceso
+            */
             $expired_at = now()->addHours((int) env('EXPIRED_TOKEN', 24));
+            /*
+            * Genera un nuevo token de acceso mediante Laravel Sanctum
+            */
             $token = $client->createToken(env('APP_NAME'), ['*'], $expired_at)->plainTextToken;
-
+            /*
+            * Retorna los datos del nuevo token de acceso
+            */
             $body = [
                 'access_token' => $token,
                 'token_type' => 'Bearer',
             ];
-
+            //Retorna el nuevo token de autenticación
             return CustomResponse::responseDefault($body, Response::HTTP_OK);
         } catch (\Throwable $e) {
             Log::info('Error al refrescar el token: '.$e->getMessage());
-
+            //Retorna mensaje de error
             return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
     }
@@ -453,21 +527,41 @@ class AuthController extends Controller
      *     )
      * )
      */
+
+    /*
+    * Función encargada de activar la cuenta mediante un código de activación 
+    */    
     public function activationClient(ActivationRequest $request): JsonResponse
     {
+        // Obtiene el idioma enviado por query param
         $language = $request->query('lang');
         try {
+            /*
+            * Inicializa la variable de respuesta
+            */
             $response = null;
+            /*
+            * Busca el cliente por el código de activación y correo electrónico proporcionados en la solicitud
+            */
             $client = Client::select(['id_client', 'status'])->firstWhere(['code_active' => Str::lower($request->code), 'email' => $request->email]);
+            /*
+            * Asigna estado activo al cliente
+            */
             $client->status = 1;
+            /*
+            * Guarda los cambios en la base de datos, activando la cuenta del cliente
+            */
             $client->save();
-
+            /*
+            * Asigna el mensaje de respuesta indicando que la cuenta fue activada exitosamente
+            */
             $response = CustomResponse::responseMessage('userActivated', Response::HTTP_OK, $language);
         } catch (\Throwable $e) {
             Log::info('Error al activar la cuenta: '.$e->getMessage());
+            // Asigna el mensaje de respuesta indicando un error interno del servidor
             $response = CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
-
+        // Retorna la respuesta con el mensaje de activación o el mensaje de error
         return $response;
     }
 
@@ -537,27 +631,45 @@ class AuthController extends Controller
      *     )
      * )
      */
+    
+    /*
+    * Función encargada de validar el token de recuperación de contraseña de un usuario
+    */
     public function recoveryValidation(LanguageRequest $request)
     {
+        //Obtiene el idioma enviado por query param
         $language = $request->query('lang', 'es');
+        //Obtiene el token enviado en el encabezado de la solicitud
         $token = $request->header('token');
+        //Inicializa la variable de respuesta
         $response = null;
+        //Verifica si el token no fue proporcionado
         if (! $token) {
+            //Si no existe devuelve un mensaje de token no proporcionado
             $response = CustomResponse::responseMessage('notToken', 401, $language);
+          //Verifica si el token es demasiado largo  
         } elseif (Str::length($token) > env('SIZE_TOKEN_JWT')) {
+            //Si es demasiado largo devuelve un mensaje de token inválido
             $response = CustomResponse::responseMessage('largeToken', 401, $language);
         } else {
+            //Divide el token en partes utilizando el punto como delimitador
             $tokenParts = explode('.', $token);
+            //Verifica si el token tiene la estructura correcta (tres partes)
             if (count($tokenParts) !== 3) {
+                //Si no tiene la estructura correcta devuelve un mensaje de token inválido
                 $response = CustomResponse::responseMessage('invalidTokenStructure', 401, $language);
             } else {
+                //Decodifica el JWT y verifica su validez
                 $response = $this->decodeToken($token, $language);
             }
         }
-
+        //Retorna la respuesta con el mensaje de validación del token
         return $response;
     }
-
+    
+    /*
+    * 
+    */
     public function decodeToken(mixed $token, string $language)
     {
         try {
@@ -872,7 +984,7 @@ class AuthController extends Controller
             $response = null;
             $activate = Str::lower(Str::random(6));
             $client = Client::select(['id_client', 'name', 'last_name', 'email', 'code_active'])->firstWhere('email', $request->email);
-            Log::info("cliente" . json_encode($client));
+            Log::info('cliente'.json_encode($client));
             $client->code_active = $activate;
             $client->save();
             $body = [
