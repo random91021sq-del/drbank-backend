@@ -705,7 +705,7 @@ class SmartReviewController extends Controller
      *     )
      * )
      */
-    public function generatePretest(Request $request, int $id)
+    public function generatePretest(int $id)
     {
         $idClient = auth('sanctum')->user()->id_client;
         $themes = collect();
