@@ -29,35 +29,53 @@ class CustomResponse
         return null;
     }
 
-    public static function responseMessage($message, $status, $lang): JsonResponse
+    public static function responseMessage(
+        $message,
+        $status,
+        $lang,
+        array $replace = []
+    ): JsonResponse
     {
-        $getLanguage = CustomResponse::getLanguage($lang);
-        $language = ! $getLanguage ? env('APP_TRANSLATION') : $getLanguage;
-
-        $response = trans('messages.'.$message, [], $language);
+        $response = self::translatedMessage($message, $lang, $replace);
 
         return response()->json(['message' => $response], $status);
     }
 
-    public static function responseBody($body, $status)
-    {
+    public static function translatedMessage(
+        string $message,
+        ?string $lang,
+        array $replace = []
+    ): string {
+        $getLanguage = self::getLanguage($lang);
+        $language = ! $getLanguage ? env('APP_TRANSLATION') : $getLanguage;
+
+        return trans('messages.'.$message, $replace, $language);
+    }
+
+    public static function responseBody(
+        $body,
+        $status = Response::HTTP_OK,
+        array $headers = [],
+        int $options = 0
+    ) {
         return response()->json(
             $body,
             $status,
-            [],
+            $headers,
             JSON_UNESCAPED_UNICODE
                 | JSON_UNESCAPED_SLASHES
                 | JSON_INVALID_UTF8_SUBSTITUTE
+                | $options
         );
     }
 
-    public static function responseValidation($message, $lang)
+    public static function responseValidation($message, $lang, array $replace = [])
     {
 
         $getLanguage = CustomResponse::getLanguage($lang);
         $language = ! $getLanguage ? env('APP_TRANSLATION') : $getLanguage;
 
-        return trans('messages.'.$message, [], $language);
+        return trans('messages.'.$message, $replace, $language);
     }
 
     public static function responseNotActive($message, $lang)

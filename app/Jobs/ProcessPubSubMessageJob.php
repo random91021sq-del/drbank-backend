@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Custom\CustomResponse;
 use App\Services\FirebaseNotificationService;
+use App\Services\SmartReviewScheduleService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -13,10 +14,13 @@ class ProcessPubSubMessageJob implements ShouldQueue
 {
     use Queueable;
 
+    private SmartReviewScheduleService $scheduleService;
+
     public function __construct(protected array $message) {}
 
-    public function handle(): void
+    public function handle(SmartReviewScheduleService $scheduleService): void
     {
+        $this->scheduleService = $scheduleService;
         try {
             $pubsubData = $this->message['data'] ?? null;
 
@@ -133,18 +137,6 @@ class ProcessPubSubMessageJob implements ShouldQueue
         ]);
     }
 
-    protected function calculateSmartReviewQuality(bool $isCorrect, string $difficulty): int
-    {
-        $difficultyScore = match ($difficulty) {
-            'hard' => 0,
-            'regular' => 1,
-            'easy' => 2,
-            default => throw new \InvalidArgumentException("Dificultad inválida: {$difficulty}"),
-        };
-
-        return $difficultyScore + ($isCorrect ? 3 : 0);
-    }
-
     protected function initializeSmartReviewTheme(
         int $idClient,
         int $idTheme,
@@ -245,7 +237,11 @@ class ProcessPubSubMessageJob implements ShouldQueue
             $studentAnswer = strtoupper(trim((string) ($answer['response'] ?? '')));
             $correctAnswer = strtoupper(trim((string) $question->response));
             $isCorrect = $studentAnswer === $correctAnswer;
-            $quality = $this->calculateSmartReviewQuality($isCorrect, $difficulty);
+            $quality = $this->scheduleService->calculateQuality(
+                $isCorrect,
+                $difficulty,
+                null
+            );
 
             $answer['response'] = $studentAnswer;
             $answer['correct'] = $isCorrect;

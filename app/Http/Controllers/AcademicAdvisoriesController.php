@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use UnexpectedValueException;
 
 /* Controlador encargado de gestionar el proceso de asesorias académicas */
 class AcademicAdvisoriesController extends Controller
@@ -162,6 +163,8 @@ class AcademicAdvisoriesController extends Controller
     */
     public function listAcademicAdvisories(Request $request)
     {
+        $language = $request->query('lang');
+
         try {
             /*
             * Obtiene el ID del cliente autenticado
@@ -187,7 +190,7 @@ class AcademicAdvisoriesController extends Controller
         } catch (\Throwable $th) {
             Log::info('Error en listado de asesorías académicas: '.$th->getMessage());
 
-            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $request->query('lang'));
+            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
     }
 
@@ -233,6 +236,8 @@ class AcademicAdvisoriesController extends Controller
     */
     public function holdMeetingSlot(HoldMeetingSlotRequest $request)
     {
+        $language = $request->query('lang');
+
         try {
             /*
             * Obtiene al usuario autenticado
@@ -258,9 +263,7 @@ class AcademicAdvisoriesController extends Controller
             * Impide reservar horarios que ya pasaron o exactamente en el momento actual 
             */
             if ($slotStart->lessThanOrEqualTo($nowPeru)) {
-                return CustomResponse::responseBody([
-                    'message' => 'El horario seleccionado ya pasó.',
-                ], Response::HTTP_BAD_REQUEST);
+                return CustomResponse::responseMessage('appointmentSlotPast',Response::HTTP_BAD_REQUEST,$language);
             }
             /*
             * Valida que el rango de horario seleccionado este 
@@ -277,15 +280,13 @@ class AcademicAdvisoriesController extends Controller
             *  Impide reservar horarios que no estén dentro de la disponibilidad del médico
             */
             if (! $isWithinAvailability) {
-                return CustomResponse::responseBody([
-                    'message' => 'El horario seleccionado no está dentro de la disponibilidad del doctor.',
-                ], Response::HTTP_BAD_REQUEST);
+                return CustomResponse::responseMessage('appointmentSlotUnavailable',Response::HTTP_BAD_REQUEST,$language);
             }
             /*
             * Se inicia una transacción para realizar de forma segura 
             * la comprobación y registro del bloqueo temporal
             */
-            return DB::transaction(function () use ($client, $request, $slotStart, $slotEnd, $nowPeru) {
+            return DB::transaction(function () use ($client, $request, $slotStart, $slotEnd, $nowPeru, $language) {
                 /*
                 * Remueve cualquier bloqueo temporal que haya expirado para el mismo doctor y horario
                 */
@@ -324,9 +325,7 @@ class AcademicAdvisoriesController extends Controller
                     ->where('scheduled_at', $slotStart)
                     ->where('expires_at', '>', $nowPeru)
                     ->exists()) {
-                    return CustomResponse::responseBody([
-                        'message' => 'El horario acaba de ser reservado por otro estudiante.',
-                    ], Response::HTTP_CONFLICT);
+                    return CustomResponse::responseMessage('appointmentSlotTaken',Response::HTTP_CONFLICT,$language);
                 }
                 /*
                 * Registra la reserva temporal del horario
@@ -350,13 +349,11 @@ class AcademicAdvisoriesController extends Controller
         } catch (QueryException $th) {
             Log::warning('Conflicto reservando horario de asesoría: '.$th->getMessage());
 
-            return CustomResponse::responseBody([
-                'message' => 'El horario acaba de ser reservado por otro estudiante.',
-            ], Response::HTTP_CONFLICT);
+            return CustomResponse::responseMessage('appointmentSlotTaken',Response::HTTP_CONFLICT,$language);
         } catch (\Throwable $th) {
             Log::error('Error reservando horario de asesoría: '.$th->getMessage());
 
-            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $request->query('lang'));
+            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
     }
 
@@ -395,13 +392,17 @@ class AcademicAdvisoriesController extends Controller
     */
     public function releaseMeetingSlot(Request $request, string $hold_token)
     {
+        $language = $request->query('lang');
+
         /*
         * Valida que el token recibido sea un UUID válido
         */
         if (! Str::isUuid($hold_token)) {
-            return CustomResponse::responseBody([
-                'message' => 'El token de reserva no es válido.',
-            ], Response::HTTP_BAD_REQUEST);
+            return CustomResponse::responseMessage(
+                'invalidAppointmentHoldToken',
+                Response::HTTP_BAD_REQUEST,
+                    $language
+            );
         }
 
         try {
@@ -418,16 +419,18 @@ class AcademicAdvisoriesController extends Controller
             /*
             * Retorna mensaje exitoso de la liberación
             */
-            return CustomResponse::responseBody([
-                'message' => 'Reserva liberada correctamente.',
-            ], Response::HTTP_OK);
+            return CustomResponse::responseMessage(
+                'appointmentHoldReleased',
+                Response::HTTP_OK,
+                    $language
+            );
         } catch (\Throwable $th) {
             Log::error('Error liberando reserva de horario: '.$th->getMessage());
 
             return CustomResponse::responseMessage(
                 'serverError',
                 Response::HTTP_INTERNAL_SERVER_ERROR,
-                $request->query('lang')
+                    $language
             );
         }
     }
@@ -480,6 +483,8 @@ class AcademicAdvisoriesController extends Controller
     */
     public function registerMeeting(RegisterMeetingRequest $request)
     {
+        $language = $request->query('lang');
+
         try {
             /*
             * Obtiene al usuario autenticado
@@ -517,9 +522,11 @@ class AcademicAdvisoriesController extends Controller
             if (! $hold) {
                 DB::rollBack();
 
-                return CustomResponse::responseBody([
-                    'message' => 'La reserva temporal no existe o ya venció.',
-                ], Response::HTTP_CONFLICT);
+                return CustomResponse::responseMessage(
+                    'appointmentHoldExpired',
+                    Response::HTTP_CONFLICT,
+                    $language
+                );
             }
             /*
             * Se registra la asesoria académica en la BD
@@ -540,6 +547,8 @@ class AcademicAdvisoriesController extends Controller
             $hold->delete();
             DB::commit(); // Se confirma la transacción en la BD
 
+            $messageKey = 'academicAdvisoryRegistered';
+
             try {
                 /*
                 * Se envia la información de la asesoria al webhook de Make
@@ -559,7 +568,7 @@ class AcademicAdvisoriesController extends Controller
                 $message = $response->json('message')?? 'La asesoría fue registrada correctamente';
                 //Verifica que el mensaje sea una cadena de texto no vacía
                 if (! is_string($message) || trim($message) === '') {
-                    throw new \RuntimeException('El webhook no devolvió un mensaje válido.');
+                    throw new UnexpectedValueException('El webhook no devolvió un mensaje válido.');
                 }
             } catch (\Throwable $webhookError) {
                 Log::error('La asesoría fue registrada, pero falló la integración con Make.', [
@@ -567,21 +576,23 @@ class AcademicAdvisoriesController extends Controller
                     'message' => $webhookError->getMessage(),
                 ]);
 
-                $message = 'No se pudo registrar la asesoria';
+                $messageKey = 'academicAdvisoryIntegrationFailed';
             }
             /*
             * Retorna el mensaje de éxito o error de la integración con Make
             */
-            return CustomResponse::responseBody([
-                'message' => $message,
-            ], Response::HTTP_CREATED);
+            return CustomResponse::responseMessage(
+                $messageKey,
+                Response::HTTP_CREATED,
+                $language
+            );
         } catch (\Throwable $th) {
             if (DB::transactionLevel() > 0) {
                 DB::rollBack();
             }
             Log::info('Error en registro de asesoría académica: '.$th->getMessage());
 
-            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $request->query('lang'));
+            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
     }
 
@@ -634,6 +645,8 @@ class AcademicAdvisoriesController extends Controller
     */
     public function updateMeeting(Request $request, int $id)
     {
+        $language = $request->query('lang');
+
         try {
             /*
             * Busca la asesoria academica por su identificador
@@ -649,19 +662,21 @@ class AcademicAdvisoriesController extends Controller
             /*
             * Retorna un mensaje de éxito indicando que la asesoria fue actualizada correctamente
             */
-            return CustomResponse::responseMessage('meetingUpdated', Response::HTTP_OK, $request->query('lang'));
+            return CustomResponse::responseMessage('meetingUpdated', Response::HTTP_OK, $language);
         } catch (ModelNotFoundException $th) {
             Log::warning('Asesoría académica no encontrada para actualización.', [
                 'academic_advisory_id' => $id,
             ]);
 
-            return CustomResponse::responseBody([
-                'message' => 'La asesoría académica no existe.',
-            ], Response::HTTP_NOT_FOUND);
+            return CustomResponse::responseMessage(
+                'academicAdvisoryNotFound',
+                Response::HTTP_NOT_FOUND,
+                    $language
+            );
         } catch (\Throwable $th) {
             Log::info('Error en actualización de asesoría académica: '.$th->getMessage());
 
-            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $request->query('lang'));
+            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
     }
 }

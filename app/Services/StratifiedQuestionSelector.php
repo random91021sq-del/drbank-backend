@@ -29,7 +29,9 @@ class StratifiedQuestionSelector
 
             $available = (clone $query)->count('q.id_question');
             if ($available < $required) {
-                throw new InsufficientStratifiedQuestionsException($idTheme, $required, $available);
+                throw new InsufficientStratifiedQuestionsException(
+                    'No hay suficientes preguntas activas para completar la selección.'
+                );
             }
 
             $result->push($query->inRandomOrder()->limit($required)->select(
@@ -77,9 +79,7 @@ class StratifiedQuestionSelector
 
             if ($available < $required) {
                 throw new InsufficientStratifiedQuestionsException(
-                    $idTheme,
-                    $required,
-                    $available
+                    'No hay suficientes preguntas activas para completar la selección.'
                 );
             }
 

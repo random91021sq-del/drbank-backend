@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Custom\CustomResponse;
 use App\Jobs\ProcessPubSubMessageJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response;
 
 class PubSubController extends Controller
 {
     public function pubSubEndpoint(Request $request)
     {
-       try {
+        $language = $request->query('lang');
+
+        try {
             $envelope = $request->all();
             $messages = [];
 
@@ -19,11 +23,11 @@ class PubSubController extends Controller
             } elseif (! empty($envelope['messages']) && is_array($envelope['messages'])) {
                 $messages = $envelope['messages'];
             } else {
-                return response()->json(['error' => 'Bad Request: No envelope'], 400);
+                return CustomResponse::responseMessage('pubSubMissingEnvelope',Response::HTTP_BAD_REQUEST,$language);
             }
 
             if (empty($messages)) {
-                return response()->json(['error' => 'Bad Request: No data'], 400);
+                return CustomResponse::responseMessage('pubSubMissingData',Response::HTTP_BAD_REQUEST,$language);
             }
 
             Log::info('Envelope recibido de PubSub', ['count' => count($messages)]);
@@ -34,15 +38,12 @@ class PubSubController extends Controller
             }
 
             // Responder inmediatamente a PubSub
-            return response()->json(['status' => 'OK'], 200);
+            return CustomResponse::responseBody(['status' => 'OK']);
 
         } catch (\Throwable $th) {
             Log::error('Error recibiendo payload de PubSub', ['error' => $th->getMessage()]);
 
-            return response()->json([
-                'error' => 'Internal Server Error',
-                'details' => $th->getMessage()
-            ], 500);
+            return CustomResponse::responseMessage('pubSubServerError',Response::HTTP_INTERNAL_SERVER_ERROR,$language);
         }
     }
 }

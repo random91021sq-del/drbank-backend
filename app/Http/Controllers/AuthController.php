@@ -401,9 +401,9 @@ class AuthController extends Controller
      *     )
      * )
      */
-    
+
     /*
-    * Función encargada de renovar el token de acceso de estudiante 
+    * Función encargada de renovar el token de acceso de estudiante
     */
     public function refresh(LanguageRequest $request): JsonResponse
     {
@@ -424,11 +424,11 @@ class AuthController extends Controller
             * Verifica si el token no fue encontrado
             */
             if (! $issuedTokens) {
-                //Si no existe devuelve un mensaje de token inválido
+                // Si no existe devuelve un mensaje de token inválido
                 return CustomResponse::responseMessage('invalidToken', Response::HTTP_BAD_REQUEST, $language);
             }
             /*
-            * Busca el cliente asociado al token 
+            * Busca el cliente asociado al token
             */
             $client = Client::select('id_client')->find($issuedTokens->tokenable_id);
             /*
@@ -450,11 +450,13 @@ class AuthController extends Controller
                 'access_token' => $token,
                 'token_type' => 'Bearer',
             ];
-            //Retorna el nuevo token de autenticación
+
+            // Retorna el nuevo token de autenticación
             return CustomResponse::responseDefault($body, Response::HTTP_OK);
         } catch (\Throwable $e) {
             Log::info('Error al refrescar el token: '.$e->getMessage());
-            //Retorna mensaje de error
+
+            // Retorna mensaje de error
             return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
     }
@@ -529,8 +531,8 @@ class AuthController extends Controller
      */
 
     /*
-    * Función encargada de activar la cuenta mediante un código de activación 
-    */    
+    * Función encargada de activar la cuenta mediante un código de activación
+    */
     public function activationClient(ActivationRequest $request): JsonResponse
     {
         // Obtiene el idioma enviado por query param
@@ -561,6 +563,7 @@ class AuthController extends Controller
             // Asigna el mensaje de respuesta indicando un error interno del servidor
             $response = CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
+
         // Retorna la respuesta con el mensaje de activación o el mensaje de error
         return $response;
     }
@@ -631,59 +634,70 @@ class AuthController extends Controller
      *     )
      * )
      */
-    
+
     /*
     * Función encargada de validar el token de recuperación de contraseña de un usuario
     */
     public function recoveryValidation(LanguageRequest $request)
     {
-        //Obtiene el idioma enviado por query param
+        // Obtiene el idioma enviado por query param
         $language = $request->query('lang', 'es');
-        //Obtiene el token enviado en el encabezado de la solicitud
+        // Obtiene el token enviado en el encabezado de la solicitud
         $token = $request->header('token');
-        //Inicializa la variable de respuesta
+        // Inicializa la variable de respuesta
         $response = null;
-        //Verifica si el token no fue proporcionado
+        // Verifica si el token no fue proporcionado
         if (! $token) {
-            //Si no existe devuelve un mensaje de token no proporcionado
+            // Si no existe devuelve un mensaje de token no proporcionado
             $response = CustomResponse::responseMessage('notToken', 401, $language);
-          //Verifica si el token es demasiado largo  
+            // Verifica si el token es demasiado largo
         } elseif (Str::length($token) > env('SIZE_TOKEN_JWT')) {
-            //Si es demasiado largo devuelve un mensaje de token inválido
+            // Si es demasiado largo devuelve un mensaje de token inválido
             $response = CustomResponse::responseMessage('largeToken', 401, $language);
         } else {
-            //Divide el token en partes utilizando el punto como delimitador
+            // Divide el token en partes utilizando el punto como delimitador
             $tokenParts = explode('.', $token);
-            //Verifica si el token tiene la estructura correcta (tres partes)
+            // Verifica si el token tiene la estructura correcta (tres partes)
             if (count($tokenParts) !== 3) {
-                //Si no tiene la estructura correcta devuelve un mensaje de token inválido
+                // Si no tiene la estructura correcta devuelve un mensaje de token inválido
                 $response = CustomResponse::responseMessage('invalidTokenStructure', 401, $language);
             } else {
-                //Decodifica el JWT y verifica su validez
+                // Decodifica el JWT y verifica su validez
                 $response = $this->decodeToken($token, $language);
             }
         }
-        //Retorna la respuesta con el mensaje de validación del token
+
+        // Retorna la respuesta con el mensaje de validación del token
         return $response;
     }
-    
+
     /*
-    * 
+    * Función encargada de decodificar y validar un token JWT de recuperación de contraseña
     */
     public function decodeToken(mixed $token, string $language)
     {
         try {
+            // Inicializa la variable de respuesta
             $response = null;
+            // Decodifica el token JWT utilizando la clave de la aplicación y el algoritmo HS256
             $tokenData = JWT::decode($token, new Key(env('APP_KEY'), 'HS256'));
+            // Obtiene la información almacenada en el campo enc del contenido del JWT
             $tokenDecode = json_decode(gzuncompress(base64_decode($tokenData->enc)));
 
+            // Verifica que la información decodificada contenga el identificador del usuario
             if (! isset($tokenDecode->id_client)) {
+                // Asigna un mensaje de respuesta indicando que el token es inválido
                 $response = CustomResponse::responseMessage('invalidToken', 401, $language);
+                // Verifica si el token ha sido utilizado previamente
             } elseif (! Cache::has('token_'.$tokenDecode->id_client)) {
+                // Asigna un mensaje de respuesta indicando que el token ya ha sido utilizado
                 $response = CustomResponse::responseMessage('tokenUsed', 401, $language);
+                // Verifica la fecha de expiración del token
             } elseif (! isset($tokenDecode->exp) || now()->gt($tokenDecode->exp)) {
+                // Asigna un mensaje de respuesta indicando que el token ha expirado
                 $response = CustomResponse::responseMessage('expiredToken', 401, $language);
             } else {
+                // Asigna un mensaje de respuesta indicando que el token es válido
                 $response = CustomResponse::responseMessage('tokenValid', 200, $language);
             }
         } catch (\Exception $e) {
@@ -691,6 +705,7 @@ class AuthController extends Controller
             $response = CustomResponse::responseMessage('invalidToken', 401, $language);
         }
 
+        // Retorna la respuesta con el mensaje de validación del token
         return $response;
     }
 
@@ -769,16 +784,25 @@ class AuthController extends Controller
      *     )
      * )
      */
+    /*
+    * Función encargada de realizar el proceso de recuperación de contraseña de un usuario
+    */
     public function recoverPassword(RecoveryRequest $request)
     {
+        //Obtiene el idioma enviado por query param
         $language = $request->query('lang');
         try {
-            $response = null;
+            //Obtiene al usuario mediante su correo electronico
             $client = Client::select(['id_client as profileId', 'name', 'last_name'])->firstWhere('email', $request->email);
+            //Prepara la información que se incluira dentro del token de recuperación
             $payload = ['id_client' => $client->profileId, 'exp' => now()->addHours(1)];
+            //Convierte y comprime la información del usuario antes de incorporarla en el JWT
             $compressed = base64_encode(gzcompress(json_encode($payload), 9));
+            //Genera un JWT firmado
             $token = JWT::encode(['enc' => $compressed], env('APP_KEY'), 'HS256');
+            //Se almacena el token JWT en cache
             Cache::put('token_'.$client->profileId, $token);
+            //Prepara el cuerpo que se enviara a la cola de mensajeria
             $body = [
                 'type' => 2,
                 'token' => $token,
@@ -786,18 +810,16 @@ class AuthController extends Controller
                 'last_name' => $client->last_name,
                 'email' => $request->email,
             ];
+            //Se envia la informacion a Google Pub Sub
             GoogleQueue::sendQueue(([
                 'value' => $body,
             ]));
-
-            // $response = CustomResponse::sendEmail($language, $request->email, $client, 2);
+            // Devuelve la respuesta de envió de correo de recuperacion
             return CustomResponse::responseMessage('recoverySent', Response::HTTP_OK, $language);
         } catch (\Throwable $e) {
             Log::info('Error al recuperar la contraseña: '.$e->getMessage());
-            $response = CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
+            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
-
-        return $response;
     }
 
     /**
@@ -884,24 +906,40 @@ class AuthController extends Controller
      *     )
      * )
      */
+
+    /*
+    * Función encargada de generar la nueva contraseña para el usuario
+    */
     public function generateNewPassword(GenerateNewPasswordRequest $request)
     {
+        // Obtiene el idioma por query param
         $language = $request->query('lang');
         try {
+            //Obtiene el token por la cabecera y lo decodifica utilizando la llave de la aplicacion y el algoritmo HS256
             $tokenData = JWT::decode($request->header('token'), new Key(env('APP_KEY'), 'HS256'));
+            //Recupera la información del estudiante almacenada dentro del campo enc del JWT
             $tokenDecode = json_decode(gzuncompress(base64_decode($tokenData->enc)));
+            //Verifica si existe un token en cache asociado al identificador del usuario
             if (! Cache::has('token_'.$tokenDecode->id_client)) {
+                //Retorna mensaje de token usado
                 return CustomResponse::responseMessage('tokenUsed', 401, $language);
             }
+            //Busca al usuario mediante su identificador obtenido del token
             $client = Client::select(['id_client', 'password', 'social_login'])->find($tokenDecode->id_client);
+            //Remueve todos los tokens de autorizacion asociados al usuario
             PersonalAccessToken::where('tokenable_id', $client->id_client)->delete();
+            //Se le asigma la nueva contraseña y se hashea
             $client->password = Hash::make($request->newPassword);
+            //Verifica si el usuario tiene activado el indicador de inicio de sesion por red social
             if ($client->social_login == 1) {
+                //Se le asigna inicio de sesion tradicional
                 $client->social_login = 0;
             }
+            //Se guardan los cambios en la base de datos
             $client->save();
+            //Se elimina el cache del proceso de recuperacion del usuario
             Cache::delete('token_'.$client->id_client);
-
+            //Retorna mensaje de contraseña actualizada correctamente
             return CustomResponse::responseMessage('passwordMatch', Response::HTTP_OK, $language);
         } catch (\Throwable $th) {
             Log::info('Error al generar la nueva contraseña: '.$th->getMessage());
@@ -977,8 +1015,13 @@ class AuthController extends Controller
      *     )
      * )
      */
+
+    /*
+    * Función encargada de reenviar un nuevo codigo de activacion al usuario
+    */
     public function resendActivation(ActivationAgainRequest $request): JsonResponse
     {
+        //
         $language = $request->query('lang');
         try {
             $response = null;
@@ -999,7 +1042,6 @@ class AuthController extends Controller
             ]);
 
             return CustomResponse::responseMessage('sentVerification', Response::HTTP_CREATED, $language);
-            // $response = CustomResponse::sendEmail($language, $request->email, $client, 1);
         } catch (\Throwable $e) {
             Log::info('Error al reenviar el código de activación: '.$e->getMessage());
             $response = CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);

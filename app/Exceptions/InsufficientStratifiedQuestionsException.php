@@ -6,13 +6,8 @@ use RuntimeException;
 
 class InsufficientStratifiedQuestionsException extends RuntimeException
 {
-    public function __construct(
-        public readonly int $idTheme,
-        public readonly int $required,
-        public readonly int $available
-    ) {
-        parent::__construct(
-            "El tema {$idTheme} requiere {$required} preguntas activas, pero solo tiene {$available}."
-        );
+    public function __construct(string $message)
+    {
+        parent::__construct($message);
     }
 }
