@@ -35,6 +35,6 @@ Schedule::job(new DispatchDueSmartReviewPosttestsJob)
     ->withoutOverlapping();
 
 Schedule::job(new GenerateDailySmartReviewAssignmentsJob)
-    ->dailyAt('00:00')
-    ->timezone('America/Lima')
+    /*->dailyAt('00:00')
+    ->timezone('America/Lima')*/
     ->withoutOverlapping();

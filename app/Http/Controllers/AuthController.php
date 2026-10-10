@@ -1021,15 +1021,18 @@ class AuthController extends Controller
     */
     public function resendActivation(ActivationAgainRequest $request): JsonResponse
     {
-        //
+        //Obtiene el idioma por query param
         $language = $request->query('lang');
         try {
-            $response = null;
+            //Se genera un código de activación de 6 caracteres aleatorios
             $activate = Str::lower(Str::random(6));
+            //Se busca al usuario por su email
             $client = Client::select(['id_client', 'name', 'last_name', 'email', 'code_active'])->firstWhere('email', $request->email);
-            Log::info('cliente'.json_encode($client));
+            //Se asigna el nuevo código de activación
             $client->code_active = $activate;
+            //Se guarda en la base de datos
             $client->save();
+            //Se arma la estructura de la información que se enviara a la cola de mensajeria
             $body = [
                 'type' => 1,
                 'name' => $client->name,
@@ -1037,17 +1040,16 @@ class AuthController extends Controller
                 'email' => $client->email,
                 'code_activate' => $activate,
             ];
+            //Se publica el mensaje a Pub Sub
             GoogleQueue::sendQueue([
                 'value' => $body,
             ]);
-
+            // Retorna respuesta de envio de verificación
             return CustomResponse::responseMessage('sentVerification', Response::HTTP_CREATED, $language);
         } catch (\Throwable $e) {
             Log::info('Error al reenviar el código de activación: '.$e->getMessage());
-            $response = CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
+            return CustomResponse::responseMessage('serverError', Response::HTTP_INTERNAL_SERVER_ERROR, $language);
         }
-
-        return $response;
     }
 
     /**
@@ -1113,11 +1115,17 @@ class AuthController extends Controller
      *     )
      * )
      */
+    /*
+    * Función encargada de obtener la información del usuario autenticado
+    */
     public function clientProfile(LanguageRequest $request): JsonResponse
     {
+        //Obtiene el idioma por query param
         $language = $request->query('lang');
         try {
+            //Obtiene la información del usuario autenticado
             $client = auth('sanctum')->user();
+            //Prepara la estructura de respuesta con los datos personales del usuario
             $data = [
                 'name' => $client->name,
                 'last_name' => $client->last_name,
@@ -1125,7 +1133,7 @@ class AuthController extends Controller
                 'phone' => $client->phone,
                 'university' => $client->university,
             ];
-
+            //Retorna la información del usuario
             return CustomResponse::responseBody($data, Response::HTTP_OK);
         } catch (\Throwable $th) {
             Log::info('Error al obtener el perfil del usuario: '.$th->getMessage());
@@ -1202,15 +1210,22 @@ class AuthController extends Controller
      *     )
      * )
      */
+    /*
+    * Función encargada del cierre de sesión del usuario
+    */
     public function logout(LogoutRequest $request): JsonResponse
     {
+        //Obtiene el idioma por query param
         $language = $request->query('lang');
         try {
+            //Busca y elimina los tokens de autenticación del usuario
             PersonalAccessToken::where('tokenable_id', $request->tokenable_id)->delete();
+            //Verifica si se envio token Firebase
             if ($request->token_fcm) {
+                //Busca y elimina el registro del token firebase
                 ClientFirebases::where('token_firebase', '=', $request->token_fcm, 'and')->delete();
             }
-
+            //Retorna respuesta de cerrado de sesión exitoso
             return CustomResponse::responseMessage('closedSession', Response::HTTP_OK, $language);
         } catch (\Throwable $th) {
             Log::info('Error en logout: '.$th->getMessage());
@@ -1279,13 +1294,22 @@ class AuthController extends Controller
      *     )
      * )
      */
+
+    /*
+    * Función encargada de eliminar la cuenta del usuario autenticado
+    */
     public function profileDelete(LanguageRequest $request): JsonResponse
     {
+        //Obtiene el idioma por query param
         $language = $request->query('lang');
         try {
+            //Obtiene los datos del usuario autenticado
             $profile = auth('sanctum')->user();
+            //Obtiene el token enviado por la cabecera
             $token = $request->bearerToken();
+            //Busca el token recibido por la cabecera
             $issuedTokens = PersonalAccessToken::findToken($token);
+            //Verifica si el token ha sido encontrado
             if (! $issuedTokens) {
                 return CustomResponse::responseMessage('invalidToken', Response::HTTP_BAD_REQUEST, $language);
             }
